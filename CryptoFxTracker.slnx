@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CryptoFxTracker.Api/CryptoFxTracker.Api.csproj" />
+    <Project Path="src/CryptoFxTracker.Application/CryptoFxTracker.Application.csproj" />
+    <Project Path="src/CryptoFxTracker.Domain/CryptoFxTracker.Domain.csproj" />
+    <Project Path="src/CryptoFxTracker.Infrastructure/CryptoFxTracker.Infrastructure.csproj" />
+  </Folder>
+</Solution>
