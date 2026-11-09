@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CryptoFxTracker.Application\CryptoFxTracker.Application.csproj" />
     <ProjectReference Include="..\CryptoFxTracker.Infrastructure\CryptoFxTracker.Infrastructure.csproj" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
   <PropertyGroup>

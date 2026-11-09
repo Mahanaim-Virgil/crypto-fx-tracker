@@ -7,6 +7,13 @@
 - CoinGecko üzerinden BTC/USD ve BTC/TRY fiyatı çeken `GET /api/prices` endpoint'i eklendi.
 - Swagger etkinleştirildi.
 
+## Aşama 2 durumu
+- `PriceHistories` entity'si ve SQL Server EF Core `DbContext` eklendi.
+- İlk migration kaynak dosyası eklendi.
+- TCMB `today.xml` üzerinden USD ve EUR satış kuru okuyan `TcmbProvider` eklendi.
+- `GET /api/price-history` endpoint'i eklendi.
+- Elle yazılmış Swagger uçları kaldırıldı; Swashbuckle entegrasyonu kullanılıyor.
+
 ## Çalıştırma
 ```powershell
 dotnet restore
@@ -21,7 +28,7 @@ Swagger: `http://localhost:5000/swagger`
 Invoke-RestMethod http://localhost:5000/api/prices
 ```
 
-> Not: CoinGecko isteği için internet bağlantısı gerekir. SQL Server, Docker ve gerçek fiyat geçmişi henüz Aşama 1 kapsamına dahil değildir.
+> Not: CoinGecko ve TCMB istekleri için internet bağlantısı gerekir. SQL Server ve migration uygulama işlemi bu ortamda çalıştırılmadı.
 >
 > Test notu: `dotnet build` başarılıdır. Bu bilgisayarda API süreci, Windows uygulama denetiminin `CryptoFxTracker.Application.dll` yüklemesini `0x800711C7` ile engellemesi nedeniyle canlı olarak başlatılamadı. Bu nedenle `/api/prices` gerçek ağ cevabı doğrulanamadı.
 
@@ -34,5 +41,5 @@ Invoke-RestMethod http://localhost:5000/api/prices
 ## Gizli bilgiler
 Bu aşamada gizli bilgi kullanılmamaktadır. İlerleyen aşamalarda bağlantı dizesi, JWT secret ve Telegram token yalnızca ortam değişkenlerinden okunacaktır.
 
-## Swagger notu
-NuGet erişimi ortam politikası tarafından engellendiği için Swashbuckle paketi indirilemedi. Buna rağmen OpenAPI JSON `/swagger/v1/swagger.json`, tarayıcı arayüzü `/swagger` altında uygulama içinde sunulmaktadır.
+## Paket ve test notu
+EF Core SQL Server, EF Core Tools ve `Swashbuckle.AspNetCore` paket referansları eklenmiştir. Ancak bu ortamda NuGet erişimi `NU1301` hatasıyla engellendiği için paketler restore edilemedi; bu nedenle Aşama 2 build'i ve migration doğrulaması çalıştırılamadı. Elle yazılmış Swagger alternatifi eklenmemiştir.
