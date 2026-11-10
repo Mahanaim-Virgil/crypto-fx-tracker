@@ -1,7 +1,9 @@
-using CryptoFxTracker.Application.Abstractions;
+using CryptoFxTracker.Application.Constants;
+using CryptoFxTracker.Application.Models;
 using CryptoFxTracker.Infrastructure;
 using CryptoFxTracker.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,25 +16,21 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.MapGet("/api/prices", async (IPriceProvider priceProvider, CancellationToken cancellationToken) =>
+app.MapGet("/api/prices", (IMemoryCache memoryCache) =>
 {
-    try
+    if (memoryCache.TryGetValue(PriceCacheKeys.CurrentPrices, out IReadOnlyCollection<PriceQuote>? prices) && prices is not null)
     {
-        var price = await priceProvider.GetBitcoinPriceAsync(cancellationToken);
-        return Results.Ok(price);
+        return Results.Ok(prices);
     }
-    catch (InvalidOperationException exception)
-    {
-        return Results.Problem(
-            title: "Fiyat sağlayıcısı hatası",
-            detail: exception.Message,
-            statusCode: StatusCodes.Status502BadGateway);
-    }
+    return Results.Problem(
+        title: "Güncel fiyat bulunamadı",
+        detail: "BackgroundService henüz başarılı bir fiyat toplama döngüsü tamamlamadı.",
+        statusCode: StatusCodes.Status503ServiceUnavailable);
 })
-.WithName("GetBitcoinPrice")
+.WithName("GetCurrentPrices")
 .WithTags("Prices")
 .Produces(StatusCodes.Status200OK)
-.ProducesProblem(StatusCodes.Status502BadGateway);
+.ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
 app.MapGet("/api/price-history", async (CryptoFxTrackerDbContext dbContext, CancellationToken cancellationToken) =>
     Results.Ok(await dbContext.PriceHistories
