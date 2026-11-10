@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <ProjectReference Include="..\CryptoFxTracker.Application\CryptoFxTracker.Application.csproj" />
     <ProjectReference Include="..\CryptoFxTracker.Infrastructure\CryptoFxTracker.Infrastructure.csproj" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
