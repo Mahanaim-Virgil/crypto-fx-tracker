@@ -92,13 +92,23 @@ public sealed class PriceCollectorService(
 
             foreach (var rate in rates)
             {
+                var recordedAtUtc = new DateTimeOffset(DateOnly.FromDateTime(rate.RateDate), TimeOnly.MinValue, TimeSpan.Zero);
+                var exists = await dbContext.PriceHistories.AnyAsync(
+                    price => price.Symbol == $"{rate.CurrencyCode}TRY" && price.RecordedAtUtc == recordedAtUtc,
+                    cancellationToken);
+
+                if (exists)
+                {
+                    continue;
+                }
+
                 dbContext.PriceHistories.Add(new PriceHistory
                 {
                     Symbol = $"{rate.CurrencyCode}TRY",
                     Provider = rate.Provider,
-                    PriceUsd = 1m,
+                    PriceUsd = null,
                     PriceTry = rate.TryValue,
-                    RecordedAtUtc = new DateTimeOffset(DateOnly.FromDateTime(rate.RateDate), TimeOnly.MinValue, TimeSpan.Zero)
+                    RecordedAtUtc = recordedAtUtc
                 });
 
                 currentPrices.Add(new PriceQuote(

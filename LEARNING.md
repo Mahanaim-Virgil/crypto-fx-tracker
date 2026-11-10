@@ -24,3 +24,28 @@
 
 1. BackgroundService uzun ömürlü/singleton, DbContext ise scoped olduğu için doğrudan enjekte edilirse yaşam döngüsü uyuşmazlığı ve thread-safety sorunları oluşabilir. Her döngüde scope oluşturulmalıdır.
 2. CoinGecko hatası loglanır. TCMB ayrı try/catch bloğunda çalışır ve servis çökmeksizin sonraki döngüye geçer.
+
+## Aşama 4 — Kimlik doğrulama ve takip listesi
+
+### Kavramlar
+
+1. **Password hashing**: Parola düz metin olarak saklanmaz. `PasswordHasher<User>` tek yönlü hash üretir ve girişte doğrulama yapar. Mülakatta, veritabanı sızsa bile düz parolaların tutulmadığı anlatılır.
+2. **JWT Bearer authentication**: Girişten sonra sunucu imzalı bir token üretir. İstemci sonraki isteklerde `Authorization: Bearer <token>` gönderir. API token imzasını, issuer, audience ve süresini doğrular.
+3. **Claims**: JWT içindeki kullanıcı kimliği ve e-posta gibi bilgiler endpoint'lerde `ClaimsPrincipal` üzerinden okunur. Takip listesi sorgusu kullanıcı ID claim'ine göre filtrelenir.
+4. **Composite key ve unique index**: Takip listesinde `{UserId, Symbol}` birleşik anahtardır. Aynı kullanıcı aynı sembolü iki kez ekleyemez; e-posta için unique index kullanılır.
+5. **Nullable veri modeli**: TCMB satırlarında USD karşılığı olmadığı için `PriceUsd` nullable yapıldı. Anlamlı olmayan bir değeri `1` gibi sahte bir değerle doldurmak yerine `null` saklanır.
+
+### Karşılaşılan hatalar ve nedenleri
+
+- `dotnet ef migrations add AddUsersWatchlistAndNullablePriceUsd` denendi ancak `dotnet-ef` aracı bu ortamda kurulu değildi. Talimat gereği migration elle yazılmadı.
+- Yeni JWT ve Identity paketleri proje dosyalarına eklendi; restore/build sonucu paket erişimine bağlıdır.
+
+### Kontrol soruları
+
+1. JWT secret neden kaynak koduna veya gerçek `appsettings.json` dosyasına yazılmamalıdır?
+2. Takip listesinde `{UserId, Symbol}` birleşik anahtarı neyi engeller?
+
+## Cevaplar
+
+1. Kaynak kodu veya repository sızarsa token üretme anahtarı da sızar. Secret ortam değişkeni veya güvenli secret store üzerinden verilmelidir.
+2. Aynı kullanıcının aynı sembolü birden fazla kez takip listesine eklemesini engeller.

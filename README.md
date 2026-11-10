@@ -21,6 +21,25 @@
 - Her kaynak için sınırlı retry ve hata izolasyonu uygulanır. Bir kaynak başarısız olsa da servis sonraki döngüde devam eder.
 - Aralık ve retry ayarları `PriceUpdate` bölümünden değiştirilebilir.
 
+## Aşama 4 durumu
+- Kullanıcı kaydı ve girişi eklendi.
+- Parolalar `PasswordHasher<User>` ile hashlenir; düz metin parola saklanmaz.
+- JWT üretimi ve Bearer doğrulaması eklendi.
+- Giriş yapmış kullanıcılar takip listesine sembol ekleyebilir, silebilir ve listeleyebilir.
+- `PriceUsd` nullable yapıldı; TCMB kayıtlarında USD fiyatı artık sabit `1` yazılmaz.
+- TCMB kayıtlarında aynı `Symbol + RecordedAtUtc` varsa tekrar kayıt eklenmez.
+
+### Aşama 4 endpoint'leri
+```http
+POST /api/auth/register
+POST /api/auth/login
+GET /api/watchlist
+POST /api/watchlist/{symbol}
+DELETE /api/watchlist/{symbol}
+```
+
+JWT secret kodda tutulmaz. `Jwt__Secret` ortam değişkeniyle, en az 32 karakter olacak şekilde verilmelidir.
+
 ## Çalıştırma
 ```powershell
 dotnet restore
@@ -50,3 +69,12 @@ Bu aşamada gizli bilgi kullanılmamaktadır. İlerleyen aşamalarda bağlantı 
 
 ## Paket ve test notu
 EF Core SQL Server, EF Core Tools ve `Swashbuckle.AspNetCore` paket referansları projededir. Bu ortamda NuGet erişimi `NU1301` hatasıyla engellendiği için Aşama 3 derlemesi ve canlı servis doğrulaması yapılamadı. Elle yazılmış Swagger alternatifi kullanılmıyor.
+
+### Aşama 4 migration notu
+Kullanıcı ve takip listesi tabloları ile nullable `PriceUsd` değişikliği için migration gereklidir. `dotnet ef migrations add` denendi ancak bu ortamda `dotnet-ef` aracı kurulu olmadığı için migration üretilemedi. Elle migration yazılmadı.
+
+### Aşama 4 paketleri
+- `src/CryptoFxTracker.Api`: `Microsoft.AspNetCore.Authentication.JwtBearer` 8.0.11
+- `src/CryptoFxTracker.Infrastructure`: `Microsoft.Extensions.Identity.Core` 8.0.11 ve `System.IdentityModel.Tokens.Jwt` 7.7.1
+
+`dotnet restore` ve `dotnet build --no-restore` NuGet erişimi `NU1301` nedeniyle başarısız oldu. API ve SQL Server canlı testi bu nedenle yapılmadı.

@@ -10,7 +10,7 @@
 ## Kalanlar
 - [x] Aşama 2: EF Core, entity'ler, migration ve fiyat geçmişi
 - [~] Aşama 3: BackgroundService, cache, retry ve fiyat kaydı kaynakları yazıldı; canlı doğrulama yapılamadı
-- [ ] Aşama 4: Kullanıcı kaydı/girişi, JWT ve takip listesi
+- [~] Aşama 4: Kullanıcı kaydı/girişi, JWT ve takip listesi kaynakları yazıldı; migration/build doğrulaması yapılamadı
 - [ ] Aşama 5: Alarm sistemi ve Telegram bildirimi
 - [ ] Aşama 6: Unit testler
 - [ ] Aşama 7: Docker, docker-compose ve tamamlanmış dokümantasyon
@@ -21,6 +21,10 @@
 - Aşama 2 build/migration üretimi: test edilmedi; EF Core ve Swashbuckle paketleri indirilemedi.
 - Aşama 3 `dotnet build`: başarısız; API ve Infrastructure projelerinde NuGet `NU1301`.
 - Aşama 3 `dotnet build --no-restore`: başarısız; mevcut assets restore kaynağı hatasını yine raporladı.
+- Aşama 4 `dotnet ef migrations add AddUsersWatchlistAndNullablePriceUsd`: başarısız; `dotnet-ef` aracı kurulu değil. Elle migration yazılmadı.
+- Aşama 4 `dotnet restore`: başarısız; API ve Infrastructure projelerinde NuGet `NU1301`.
+- Aşama 4 `dotnet build --no-restore`: başarısız; aynı `NU1301` hatası devam etti. Application ve Domain derlendi, API ve Infrastructure derlenemedi.
+- Aşama 4 API, SQL Server ve endpoint testi: çalıştırılmadı; build/restore engeli nedeniyle doğrulanamadı.
 - API çalıştırma, birkaç BackgroundService döngüsü, `sqlcmd` ile PriceHistories doğrulaması ve `GET /api/price-history`: test edilmedi; build/restore engeli nedeniyle çalıştırılamadı.
 - Swagger ve API canlı denemesi: başlatılamadı. Windows uygulama denetimi, `CryptoFxTracker.Application.dll` yüklenmesini `0x800711C7` ile engelledi.
 - CoinGecko gerçek ağ çağrısı: test edilemedi; API süreç başlatma aşamasında durdu.
@@ -33,6 +37,9 @@
 - EF Core migration dosyaları kaynak olarak eklendi; `dotnet ef` ile üretim/doğrulama yapılamadı.
 - Aşama 3'te entity/schema değişmediği için yeni migration gerekmedi; mevcut Aşama 2 migration'ı kullanılıyor.
 - `PriceUpdate:IntervalSeconds` varsayılanı 60, retry sayısı 3, retry gecikmesi 2 saniyedir.
+- Aşama 4'te `PriceUsd` nullable yapıldı ve TCMB aynı `Symbol + RecordedAtUtc` kaydını tekrar eklemiyor.
+- JWT secret yalnızca `Jwt__Secret` ortam değişkeninden bekleniyor; minimum 32 karakter kontrolü var.
+- `PriceHistory.PriceUsd` nullable yapıldı; TCMB kayıtlarında sabit `1` yerine `null` yazılıyor.
 
 ## GitHub durumu
 - Private repo: https://github.com/Mahanaim-Virgil/crypto-fx-tracker

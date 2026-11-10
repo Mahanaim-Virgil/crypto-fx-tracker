@@ -5,6 +5,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
     <ProjectReference Include="..\CryptoFxTracker.Application\CryptoFxTracker.Application.csproj" />
     <ProjectReference Include="..\CryptoFxTracker.Infrastructure\CryptoFxTracker.Infrastructure.csproj" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />

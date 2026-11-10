@@ -7,6 +7,8 @@ public sealed class CryptoFxTrackerDbContext(DbContextOptions<CryptoFxTrackerDbC
     : DbContext(options)
 {
     public DbSet<PriceHistory> PriceHistories => Set<PriceHistory>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<UserWatchlist> UserWatchlists => Set<UserWatchlist>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -16,10 +18,30 @@ public sealed class CryptoFxTrackerDbContext(DbContextOptions<CryptoFxTrackerDbC
             entity.HasKey(price => price.Id);
             entity.Property(price => price.Symbol).HasMaxLength(20).IsRequired();
             entity.Property(price => price.Provider).HasMaxLength(50).IsRequired();
-            entity.Property(price => price.PriceUsd).HasPrecision(20, 8);
+            entity.Property(price => price.PriceUsd).HasPrecision(20, 8).IsRequired(false);
             entity.Property(price => price.PriceTry).HasPrecision(20, 8);
             entity.Property(price => price.RecordedAtUtc).IsRequired();
             entity.HasIndex(price => new { price.Symbol, price.RecordedAtUtc });
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.ToTable("Users");
+            entity.HasKey(user => user.Id);
+            entity.Property(user => user.Email).HasMaxLength(320).IsRequired();
+            entity.Property(user => user.PasswordHash).HasMaxLength(500).IsRequired();
+            entity.HasIndex(user => user.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<UserWatchlist>(entity =>
+        {
+            entity.ToTable("UserWatchlists");
+            entity.HasKey(item => new { item.UserId, item.Symbol });
+            entity.Property(item => item.Symbol).HasMaxLength(20).IsRequired();
+            entity.HasOne(item => item.User)
+                .WithMany(user => user.Watchlist)
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
