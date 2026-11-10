@@ -98,7 +98,7 @@ public sealed class PriceCollectorService(
                     Provider = rate.Provider,
                     PriceUsd = 1m,
                     PriceTry = rate.TryValue,
-                    RecordedAtUtc = new DateTimeOffset(rate.RateDate, TimeOnly.MinValue, TimeSpan.Zero)
+                    RecordedAtUtc = new DateTimeOffset(DateOnly.FromDateTime(rate.RateDate), TimeOnly.MinValue, TimeSpan.Zero)
                 });
 
                 currentPrices.Add(new PriceQuote(
