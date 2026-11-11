@@ -1,10 +1,11 @@
+using CryptoFxTracker.Api.Endpoints;
+using CryptoFxTracker.Api.Extensions;
 using CryptoFxTracker.Application.Constants;
 using CryptoFxTracker.Application.Abstractions;
 using CryptoFxTracker.Application.Models;
 using CryptoFxTracker.Infrastructure;
 using CryptoFxTracker.Infrastructure.Auth;
 using CryptoFxTracker.Infrastructure.Persistence;
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -121,7 +122,7 @@ app.MapGet("/api/price-history", async (CryptoFxTrackerDbContext dbContext, Canc
 
 app.MapGet("/api/watchlist", async (ClaimsPrincipal user, CryptoFxTrackerDbContext dbContext, CancellationToken cancellationToken) =>
 {
-    var userId = GetUserId(user);
+    var userId = user.GetUserId();
     var symbols = await dbContext.UserWatchlists
         .Where(item => item.UserId == userId)
         .OrderBy(item => item.Symbol)
@@ -135,7 +136,7 @@ app.MapGet("/api/watchlist", async (ClaimsPrincipal user, CryptoFxTrackerDbConte
 
 app.MapPost("/api/watchlist/{symbol}", async (string symbol, ClaimsPrincipal user, CryptoFxTrackerDbContext dbContext, CancellationToken cancellationToken) =>
 {
-    var userId = GetUserId(user);
+    var userId = user.GetUserId();
     var normalizedSymbol = symbol.Trim().ToUpperInvariant();
     if (string.IsNullOrWhiteSpace(normalizedSymbol) || normalizedSymbol.Length > 20)
     {
@@ -164,7 +165,7 @@ app.MapPost("/api/watchlist/{symbol}", async (string symbol, ClaimsPrincipal use
 
 app.MapDelete("/api/watchlist/{symbol}", async (string symbol, ClaimsPrincipal user, CryptoFxTrackerDbContext dbContext, CancellationToken cancellationToken) =>
 {
-    var userId = GetUserId(user);
+    var userId = user.GetUserId();
     var normalizedSymbol = symbol.Trim().ToUpperInvariant();
     var item = await dbContext.UserWatchlists.FindAsync([userId, normalizedSymbol], cancellationToken);
     if (item is null)
@@ -180,14 +181,8 @@ app.MapDelete("/api/watchlist/{symbol}", async (string symbol, ClaimsPrincipal u
 .WithName("RemoveFromWatchlist")
 .WithTags("Watchlist");
 
-app.Run();
+app.MapAlertEndpoints();
 
-static long GetUserId(ClaimsPrincipal user)
-{
-    var value = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
-    return long.TryParse(value, out var userId)
-        ? userId
-        : throw new UnauthorizedAccessException("JWT kullanıcı kimliği bulunamadı.");
-}
+app.Run();
 
 public partial class Program;
