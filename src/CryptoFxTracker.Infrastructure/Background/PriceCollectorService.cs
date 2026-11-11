@@ -93,9 +93,20 @@ public sealed class PriceCollectorService(
 
             foreach (var rate in rates)
             {
+                var symbol = $"{rate.CurrencyCode}TRY";
                 var recordedAtUtc = new DateTimeOffset(DateOnly.FromDateTime(rate.RateDate), TimeOnly.MinValue, TimeSpan.Zero);
+
+                // Önbellek her döngüde baştan yazıldığı için kur, veritabanında zaten olsa da
+                // önbelleğe eklenmeli; yoksa günün ilk döngüsünden sonra önbellekten düşer.
+                currentPrices.Add(new PriceQuote(
+                    Symbol: symbol,
+                    Usd: 1m,
+                    Try: rate.TryValue,
+                    RetrievedAtUtc: DateTimeOffset.UtcNow,
+                    Provider: rate.Provider));
+
                 var exists = await dbContext.PriceHistories.AnyAsync(
-                    price => price.Symbol == $"{rate.CurrencyCode}TRY" && price.RecordedAtUtc == recordedAtUtc,
+                    price => price.Symbol == symbol && price.RecordedAtUtc == recordedAtUtc,
                     cancellationToken);
 
                 if (exists)
@@ -105,19 +116,12 @@ public sealed class PriceCollectorService(
 
                 dbContext.PriceHistories.Add(new PriceHistory
                 {
-                    Symbol = $"{rate.CurrencyCode}TRY",
+                    Symbol = symbol,
                     Provider = rate.Provider,
                     PriceUsd = null,
                     PriceTry = rate.TryValue,
                     RecordedAtUtc = recordedAtUtc
                 });
-
-                currentPrices.Add(new PriceQuote(
-                    Symbol: rate.CurrencyCode,
-                    Usd: 1m,
-                    Try: rate.TryValue,
-                    RetrievedAtUtc: DateTimeOffset.UtcNow,
-                    Provider: rate.Provider));
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -134,8 +138,8 @@ public sealed class PriceCollectorService(
         {
             try
             {
-                await dbContext.SaveChangesAsync(cancellationToken);
-                logger.LogInformation("{Count} fiyat kaydı veritabanına yazıldı.", currentPrices.Count);
+                var writtenCount = await dbContext.SaveChangesAsync(cancellationToken);
+                logger.LogInformation("{Count} fiyat kaydı veritabanına yazıldı.", writtenCount);
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
