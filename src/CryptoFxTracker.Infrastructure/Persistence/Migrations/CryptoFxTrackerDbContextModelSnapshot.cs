@@ -22,6 +22,53 @@ namespace CryptoFxTracker.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("CryptoFxTracker.Domain.Entities.PriceAlert", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Condition")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("TargetPriceTry")
+                        .HasPrecision(20, 8)
+                        .HasColumnType("decimal(20,8)");
+
+                    b.Property<DateTime?>("TriggeredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("TriggeredPriceTry")
+                        .HasPrecision(20, 8)
+                        .HasColumnType("decimal(20,8)");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Symbol", "IsActive");
+
+                    b.ToTable("PriceAlerts", (string)null);
+                });
+
             modelBuilder.Entity("CryptoFxTracker.Domain.Entities.PriceHistory", b =>
                 {
                     b.Property<long>("Id")
@@ -104,6 +151,17 @@ namespace CryptoFxTracker.Infrastructure.Persistence.Migrations
                     b.ToTable("UserWatchlists", (string)null);
                 });
 
+            modelBuilder.Entity("CryptoFxTracker.Domain.Entities.PriceAlert", b =>
+                {
+                    b.HasOne("CryptoFxTracker.Domain.Entities.User", "User")
+                        .WithMany("PriceAlerts")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("CryptoFxTracker.Domain.Entities.UserWatchlist", b =>
                 {
                     b.HasOne("CryptoFxTracker.Domain.Entities.User", "User")
@@ -117,6 +175,8 @@ namespace CryptoFxTracker.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("CryptoFxTracker.Domain.Entities.User", b =>
                 {
+                    b.Navigation("PriceAlerts");
+
                     b.Navigation("Watchlist");
                 });
 #pragma warning restore 612, 618

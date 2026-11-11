@@ -9,6 +9,7 @@ public sealed class CryptoFxTrackerDbContext(DbContextOptions<CryptoFxTrackerDbC
     public DbSet<PriceHistory> PriceHistories => Set<PriceHistory>();
     public DbSet<User> Users => Set<User>();
     public DbSet<UserWatchlist> UserWatchlists => Set<UserWatchlist>();
+    public DbSet<PriceAlert> PriceAlerts => Set<PriceAlert>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,6 +42,21 @@ public sealed class CryptoFxTrackerDbContext(DbContextOptions<CryptoFxTrackerDbC
             entity.HasOne(item => item.User)
                 .WithMany(user => user.Watchlist)
                 .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PriceAlert>(entity =>
+        {
+            entity.ToTable("PriceAlerts");
+            entity.HasKey(alert => alert.Id);
+            entity.Property(alert => alert.Symbol).HasMaxLength(20).IsRequired();
+            entity.Property(alert => alert.Condition).HasConversion<string>().HasMaxLength(10);
+            entity.Property(alert => alert.TargetPriceTry).HasPrecision(20, 8);
+            entity.Property(alert => alert.TriggeredPriceTry).HasPrecision(20, 8);
+            entity.HasIndex(alert => new { alert.Symbol, alert.IsActive });
+            entity.HasOne(alert => alert.User)
+                .WithMany(user => user.PriceAlerts)
+                .HasForeignKey(alert => alert.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

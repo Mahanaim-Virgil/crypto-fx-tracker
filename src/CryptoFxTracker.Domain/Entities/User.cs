@@ -7,4 +7,5 @@ public sealed class User
     public required string PasswordHash { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public ICollection<UserWatchlist> Watchlist { get; set; } = [];
+    public ICollection<PriceAlert> PriceAlerts { get; set; } = [];
 }
