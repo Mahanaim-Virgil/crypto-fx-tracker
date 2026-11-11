@@ -56,7 +56,7 @@ Invoke-RestMethod http://localhost:5000/api/prices
 
 > Not: CoinGecko ve TCMB istekleri için internet bağlantısı, fiyat geçmişi için SQL Server gerekir.
 >
-> Test notu: Aşama 3 sırasında `dotnet build` NuGet kaynağına erişilemediği için `NU1301` ile başarısız oldu. API, SQL Server, `sqlcmd` ve endpoint testleri bu nedenle çalıştırılamadı.
+> Test notu: Aşama 4 yerel makinede derlendi, migration uygulandı ve kayıt/giriş/takip listesi uç noktaları Swagger üzerinden test edildi.
 
 ## Katmanlar
 - `Api`: HTTP endpoint'leri, Swagger ve uygulama başlangıcı.
@@ -68,13 +68,18 @@ Invoke-RestMethod http://localhost:5000/api/prices
 Bu aşamada gizli bilgi kullanılmamaktadır. İlerleyen aşamalarda bağlantı dizesi, JWT secret ve Telegram token yalnızca ortam değişkenlerinden okunacaktır.
 
 ## Paket ve test notu
-EF Core SQL Server, EF Core Tools ve `Swashbuckle.AspNetCore` paket referansları projededir. Bu ortamda NuGet erişimi `NU1301` hatasıyla engellendiği için Aşama 3 derlemesi ve canlı servis doğrulaması yapılamadı. Elle yazılmış Swagger alternatifi kullanılmıyor.
+EF Core SQL Server, EF Core Tools ve `Swashbuckle.AspNetCore` paket referansları projededir. Swagger arayüzü JWT desteğiyle `/swagger` adresinde çalışır.
 
 ### Aşama 4 migration notu
-Kullanıcı ve takip listesi tabloları ile nullable `PriceUsd` değişikliği için migration gereklidir. `dotnet ef migrations add` denendi ancak bu ortamda `dotnet-ef` aracı kurulu olmadığı için migration üretilemedi. Elle migration yazılmadı.
+
+Kullanıcı ve takip listesi tabloları ile nullable `PriceUsd` değişikliği için `AddUsersWatchlistAndNullablePriceUsd` migration'ı eklendi. Uygulamak için:
+
+dotnet ef database update --project src/CryptoFxTracker.Infrastructure --startup-project src/CryptoFxTracker.Api
+
+Önkoşul: `Jwt__Secret` ortam değişkeni tanımlı olmalı (en az 32 karakter). Uygulama başlarken bunu kontrol eder, `dotnet ef` de uygulamayı başlattığı için bu değişken olmadan çalışmaz.
 
 ### Aşama 4 paketleri
 - `src/CryptoFxTracker.Api`: `Microsoft.AspNetCore.Authentication.JwtBearer` 8.0.11
 - `src/CryptoFxTracker.Infrastructure`: `Microsoft.Extensions.Identity.Core` 8.0.11 ve `System.IdentityModel.Tokens.Jwt` 7.7.1
 
-`dotnet restore` ve `dotnet build --no-restore` NuGet erişimi `NU1301` nedeniyle başarısız oldu. API ve SQL Server canlı testi bu nedenle yapılmadı.
+Aşama 4 yerel makinede doğrulandı (ayrıntılar PROGRESS.md içinde).
