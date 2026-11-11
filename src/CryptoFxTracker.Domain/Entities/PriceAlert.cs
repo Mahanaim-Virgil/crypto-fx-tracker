@@ -13,4 +13,19 @@ public sealed class PriceAlert
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? TriggeredAtUtc { get; set; }
     public decimal? TriggeredPriceTry { get; set; }
+
+    // Hedefe tam ulaşmak da tetikler: "fiyat X'e gelince haber ver" beklentisine uyar.
+    public bool IsTriggeredBy(decimal currentPriceTry) => IsActive && Condition switch
+    {
+        AlertCondition.Above => currentPriceTry >= TargetPriceTry,
+        AlertCondition.Below => currentPriceTry <= TargetPriceTry,
+        _ => false
+    };
+
+    public void MarkTriggered(decimal priceTry, DateTime triggeredAtUtc)
+    {
+        IsActive = false;
+        TriggeredPriceTry = priceTry;
+        TriggeredAtUtc = triggeredAtUtc;
+    }
 }

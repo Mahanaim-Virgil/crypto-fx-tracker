@@ -15,6 +15,7 @@ namespace CryptoFxTracker.Infrastructure.Background;
 public sealed class PriceCollectorService(
     IServiceScopeFactory scopeFactory,
     IMemoryCache memoryCache,
+    PriceUpdateChannel priceUpdates,
     IOptions<PriceUpdateOptions> options,
     ILogger<PriceCollectorService> logger) : BackgroundService
 {
@@ -131,7 +132,11 @@ public sealed class PriceCollectorService(
 
         if (currentPrices.Count > 0)
         {
-            memoryCache.Set(PriceCacheKeys.CurrentPrices, currentPrices.AsReadOnly());
+            var snapshot = currentPrices.AsReadOnly();
+            memoryCache.Set(PriceCacheKeys.CurrentPrices, snapshot);
+
+            // Alarm servisine haber ver; kuyruk doluysa eski parti atılır, toplayıcı beklemez.
+            priceUpdates.Publish(snapshot);
         }
 
         if (dbContext.ChangeTracker.HasChanges())

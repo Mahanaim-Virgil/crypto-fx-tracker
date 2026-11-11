@@ -2,6 +2,7 @@ using CryptoFxTracker.Application.Abstractions;
 using CryptoFxTracker.Infrastructure.Background;
 using CryptoFxTracker.Infrastructure.Auth;
 using CryptoFxTracker.Infrastructure.CoinGecko;
+using CryptoFxTracker.Infrastructure.Notifications;
 using CryptoFxTracker.Infrastructure.Persistence;
 using CryptoFxTracker.Infrastructure.Tcmb;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,9 @@ public static class DependencyInjection
         services.AddMemoryCache();
         services.Configure<PriceUpdateOptions>(configuration.GetSection(PriceUpdateOptions.SectionName));
         services.AddHostedService<PriceCollectorService>();
+        services.AddSingleton<PriceUpdateChannel>();
+        services.AddSingleton<IAlertNotificationSender, LoggingAlertNotificationSender>();
+        services.AddHostedService<AlertCheckerService>();
         services.AddAuth(configuration);
 
         services.AddDbContext<CryptoFxTrackerDbContext>(options =>
