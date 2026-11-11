@@ -34,7 +34,7 @@ namespace CryptoFxTracker.Infrastructure.Persistence.Migrations
                         .HasPrecision(20, 8)
                         .HasColumnType("decimal(20,8)");
 
-                    b.Property<decimal>("PriceUsd")
+                    b.Property<decimal?>("PriceUsd")
                         .HasPrecision(20, 8)
                         .HasColumnType("decimal(20,8)");
 
@@ -56,6 +56,68 @@ namespace CryptoFxTracker.Infrastructure.Persistence.Migrations
                     b.HasIndex("Symbol", "RecordedAtUtc");
 
                     b.ToTable("PriceHistories", (string)null);
+                });
+
+            modelBuilder.Entity("CryptoFxTracker.Domain.Entities.User", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("CryptoFxTracker.Domain.Entities.UserWatchlist", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Symbol")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("AddedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("UserId", "Symbol");
+
+                    b.ToTable("UserWatchlists", (string)null);
+                });
+
+            modelBuilder.Entity("CryptoFxTracker.Domain.Entities.UserWatchlist", b =>
+                {
+                    b.HasOne("CryptoFxTracker.Domain.Entities.User", "User")
+                        .WithMany("Watchlist")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("CryptoFxTracker.Domain.Entities.User", b =>
+                {
+                    b.Navigation("Watchlist");
                 });
 #pragma warning restore 612, 618
         }
