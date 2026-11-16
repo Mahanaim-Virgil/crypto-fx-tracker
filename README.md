@@ -1,85 +1,103 @@
-# Kripto & Döviz Fiyat Takip ve Alarm Sistemi
+# Crypto & FX Tracker
 
-.NET 8 Web API ile geliştirilen, kripto ve döviz fiyatlarını takip edip alarm üreten katmanlı backend projesi.
+Kripto ve döviz fiyatlarını takip eden, kullanıcıların fiyat alarmı kurabildiği bir .NET 8 Web API.
+CoinGecko'dan BTC fiyatını, TCMB'den USD/TRY ve EUR/TRY kurlarını dakikada bir toplar, geçmişi SQL Server'da saklar
+ve kullanıcının belirlediği eşik aşılınca alarm üretir.
 
-## Aşama 1 durumu
-- Katmanlı solution iskeleti oluşturuldu.
-- CoinGecko üzerinden BTC/USD ve BTC/TRY fiyatı çeken `GET /api/prices` endpoint'i eklendi.
-- Swagger etkinleştirildi.
+**Teknolojiler:** C#, .NET 8, ASP.NET Core (Minimal API), Entity Framework Core, SQL Server, JWT, Swagger
 
-## Aşama 2 durumu
-- `PriceHistories` entity'si ve SQL Server EF Core `DbContext` eklendi.
-- İlk migration kaynak dosyası eklendi.
-- TCMB `today.xml` üzerinden USD ve EUR satış kuru okuyan `TcmbProvider` eklendi.
-- `GET /api/price-history` endpoint'i eklendi.
-- Elle yazılmış Swagger uçları kaldırıldı; Swashbuckle entegrasyonu kullanılıyor.
+## Özellikler
 
-## Aşama 3 durumu
-- `PriceCollectorService` ile CoinGecko ve TCMB fiyatları varsayılan 60 saniyede bir toplanır.
-- Başarılı fiyatlar `PriceHistories` tablosuna kaydedilir.
-- Güncel fiyatlar `IMemoryCache` içinde tutulur; `GET /api/prices` cache'ten cevap verir.
-- Her kaynak için sınırlı retry ve hata izolasyonu uygulanır. Bir kaynak başarısız olsa da servis sonraki döngüde devam eder.
-- Aralık ve retry ayarları `PriceUpdate` bölümünden değiştirilebilir.
+- Arka planda dakikada bir fiyat toplama (CoinGecko + TCMB), dış API hatalarında sınırlı yeniden deneme
+- Güncel fiyatların bellekte önbelleklenmesi: `GET /api/prices` dış API'ye gitmeden yanıt verir
+- Fiyat geçmişi (TCMB'nin günlük kuru aynı gün için tekrar yazılmaz)
+- JWT ile kayıt ve giriş, `PasswordHasher` ile şifre hash'leme
+- Kullanıcıya özel takip listesi
+- Fiyat alarmları: "USDTRY 45 TL'nin üstüne çıkınca" gibi TL bazlı koşullar (`Above` / `Below`), arka planda kontrol
 
-## Aşama 4 durumu
-- Kullanıcı kaydı ve girişi eklendi.
-- Parolalar `PasswordHasher<User>` ile hashlenir; düz metin parola saklanmaz.
-- JWT üretimi ve Bearer doğrulaması eklendi.
-- Giriş yapmış kullanıcılar takip listesine sembol ekleyebilir, silebilir ve listeleyebilir.
-- `PriceUsd` nullable yapıldı; TCMB kayıtlarında USD fiyatı artık sabit `1` yazılmaz.
-- TCMB kayıtlarında aynı `Symbol + RecordedAtUtc` varsa tekrar kayıt eklenmez.
+## Mimari
 
-### Aşama 4 endpoint'leri
-```http
-POST /api/auth/register
-POST /api/auth/login
-GET /api/watchlist
-POST /api/watchlist/{symbol}
-DELETE /api/watchlist/{symbol}
+```
+CryptoFxTracker.Api             HTTP uç noktaları, JWT doğrulaması, Swagger, uygulama başlangıcı
+CryptoFxTracker.Application     Arayüzler (IPriceProvider, ITcmbProvider, IAuthService...) ve modeller
+CryptoFxTracker.Domain          Entity'ler ve iş kuralları (ör. PriceAlert.IsTriggeredBy)
+CryptoFxTracker.Infrastructure  EF Core, CoinGecko/TCMB istemcileri, arka plan servisleri
 ```
 
-JWT secret kodda tutulmaz. `Jwt__Secret` ortam değişkeniyle, en az 32 karakter olacak şekilde verilmelidir.
+Akış:
+
+```
+PriceCollectorService ──(60 sn)──> CoinGecko / TCMB
+        │  fiyatları yazar
+        ├──> SQL Server (PriceHistories)
+        ├──> IMemoryCache ──> GET /api/prices
+        └──> PriceUpdateChannel ──> AlertCheckerService ──> bildirim gönderici
+```
+
+### Tasarım kararları
+
+- **Toplayıcı ile alarm kontrolü bir kuyrukla ayrıldı.** Fiyat toplayıcı her partiyi kapasitesi 1 olan bir
+  `Channel`'a bırakır ve beklemez; alarm servisi kendi hızında okur. Bildirim yavaşlarsa fiyat toplama etkilenmez.
+  Takas: alarm servisi geride kalırsa ara partiler atlanır, sadece en güncel fiyat kontrol edilir.
+- **`DbContext` arka plan servisine constructor'dan verilmez.** `BackgroundService` singleton, `DbContext` scoped
+  olduğu için her döngüde `IServiceScopeFactory` ile yeni scope açılır.
+- **Alarm koşulu entity'de.** "Tetiklendi mi?" kuralı SQL'de değil `PriceAlert.IsTriggeredBy` içinde, tek yerde.
+  Takas: bir sembolün tüm aktif alarmları belleğe okunur; alarm sayısı çok büyürse sorgu SQL'e taşınmalı.
+- **Gizli anahtarlar kodda yok.** JWT anahtarı `Jwt__Secret` ortam değişkeninden okunur; yoksa uygulama başlamaz.
+
+## Uç noktalar
+
+| Metot | Yol | Kimlik doğrulama | Açıklama |
+| --- | --- | --- | --- |
+| GET | `/api/prices` | — | Güncel fiyatlar (önbellekten) |
+| GET | `/api/price-history` | — | Fiyat geçmişi, en yeniden eskiye |
+| POST | `/api/auth/register` | — | Kayıt |
+| POST | `/api/auth/login` | — | Giriş, JWT döner |
+| GET | `/api/watchlist` | JWT | Takip listesini getir |
+| POST | `/api/watchlist/{symbol}` | JWT | Sembol ekle |
+| DELETE | `/api/watchlist/{symbol}` | JWT | Sembol sil |
+| POST | `/api/alerts` | JWT | Alarm oluştur |
+| GET | `/api/alerts` | JWT | Alarmları listele |
+| DELETE | `/api/alerts/{id}` | JWT | Alarm sil |
 
 ## Çalıştırma
-```powershell
-dotnet restore
-dotnet build
-dotnet run --project src/CryptoFxTracker.Api
+
+Gereksinimler: .NET 8 SDK, SQL Server LocalDB (Visual Studio ile gelir), `dotnet-ef` aracı.
+
+```bash
+git clone https://github.com/Mahanaim-Virgil/crypto-fx-tracker.git
+cd crypto-fx-tracker
 ```
 
-Swagger: `http://localhost:5000/swagger`
+JWT anahtarını en az 32 karakter olacak şekilde ortam değişkeni olarak verin (Windows `cmd`):
 
-Örnek istek:
-```powershell
-Invoke-RestMethod http://localhost:5000/api/prices
+```bat
+set Jwt__Secret=buraya-en-az-32-karakterlik-rastgele-bir-anahtar
 ```
 
-> Not: CoinGecko ve TCMB istekleri için internet bağlantısı, fiyat geçmişi için SQL Server gerekir.
->
-> Test notu: Aşama 4 yerel makinede derlendi, migration uygulandı ve kayıt/giriş/takip listesi uç noktaları Swagger üzerinden test edildi.
+Veritabanını oluşturup API'yi başlatın:
 
-## Katmanlar
-- `Api`: HTTP endpoint'leri, Swagger ve uygulama başlangıcı.
-- `Application`: Use-case sözleşmeleri ve arayüzler.
-- `Domain`: İş alanı modelleri.
-- `Infrastructure`: Harici servis erişimleri; bu aşamada CoinGecko.
-
-## Gizli bilgiler
-Bu aşamada gizli bilgi kullanılmamaktadır. İlerleyen aşamalarda bağlantı dizesi, JWT secret ve Telegram token yalnızca ortam değişkenlerinden okunacaktır.
-
-## Paket ve test notu
-EF Core SQL Server, EF Core Tools ve `Swashbuckle.AspNetCore` paket referansları projededir. Swagger arayüzü JWT desteğiyle `/swagger` adresinde çalışır.
-
-### Aşama 4 migration notu
-
-Kullanıcı ve takip listesi tabloları ile nullable `PriceUsd` değişikliği için `AddUsersWatchlistAndNullablePriceUsd` migration'ı eklendi. Uygulamak için:
-
+```bash
 dotnet ef database update --project src/CryptoFxTracker.Infrastructure --startup-project src/CryptoFxTracker.Api
+dotnet run --project src/CryptoFxTracker.Api --urls http://localhost:5000
+```
 
-Önkoşul: `Jwt__Secret` ortam değişkeni tanımlı olmalı (en az 32 karakter). Uygulama başlarken bunu kontrol eder, `dotnet ef` de uygulamayı başlattığı için bu değişken olmadan çalışmaz.
+Swagger: http://localhost:5000/swagger — giriş yaptıktan sonra dönen token'ı **Authorize** butonuna yapıştırın.
 
-### Aşama 4 paketleri
-- `src/CryptoFxTracker.Api`: `Microsoft.AspNetCore.Authentication.JwtBearer` 8.0.11
-- `src/CryptoFxTracker.Infrastructure`: `Microsoft.Extensions.Identity.Core` 8.0.11 ve `System.IdentityModel.Tokens.Jwt` 7.7.1
+Bağlantı dizesi ve toplama aralığı `src/CryptoFxTracker.Api/appsettings.json` içindedir.
 
-Aşama 4 yerel makinede doğrulandı (ayrıntılar PROGRESS.md içinde).
+## Yol haritası
+
+Proje aşamalarla geliştiriliyor; her tamamlanan aşamanın doğrulanmış son commit'i `stage-N` etiketiyle işaretli.
+
+| Aşama | İçerik | Durum |
+| --- | --- | --- |
+| 1 | Katmanlı iskelet, CoinGecko, Swagger | Tamamlandı (`stage-1`) |
+| 2 | EF Core, fiyat geçmişi, TCMB | Tamamlandı (`stage-2`) |
+| 3 | Arka plan toplayıcı, önbellek, retry | Tamamlandı (`stage-3`) |
+| 4 | Kayıt/giriş, JWT, takip listesi | Tamamlandı (`stage-4`) |
+| 5 | Fiyat alarmları, Telegram bildirimi | Sürüyor: alarmlar hazır, Telegram geliştiriliyor |
+| 6 | xUnit testleri | Planlandı |
+| 7 | Docker, docker-compose | Planlandı |
+
+Ayrıntılı ilerleme ve doğrulama notları: [PROGRESS.md](PROGRESS.md). Her aşamada öğrendiklerim: [LEARNING.md](LEARNING.md).
