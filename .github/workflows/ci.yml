@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+# İş akışı yalnızca kodu okur; repoya yazma yetkisi yok.
+permissions:
+  contents: read
+
+# Aynı dala art arda push edilirse eski çalışma iptal edilir.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Projeler net8.0 hedefler (8.0 çalışma zamanı gerekir); çözüm dosyası .slnx olduğu için
+      # derleme SDK 10 ile yapılır (SDK 8 .slnx biçimini tanımaz).
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore CryptoFxTracker.slnx
+
+      - name: Build
+        run: dotnet build CryptoFxTracker.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test CryptoFxTracker.slnx --no-build --configuration Release --verbosity normal
