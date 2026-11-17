@@ -79,3 +79,33 @@
 1. Toplayıcı beklemez; kuyruktaki eski parti atılır ve alarm servisi sıradaki okumada en güncel fiyatı görür. Ara fiyatlar kontrol edilmez, bu kabul edilen bir takastır.
 2. Önce pasif yapılsaydı ve gönderim başarısız olsaydı, kullanıcı hiç haber almazdı. Sonra pasif yapıldığı için en kötü durumda aynı bildirim iki kez gider.
 3. İstek adresini yazan HTTP logları kapatılmalı, hata mesajlarına adres yazılmamalı ve token yalnızca ortam değişkeninden okunmalı. Token sızarsa (örneğin bir ekran görüntüsünde) BotFather'da `/revoke` ile hemen yenilenmeli.
+
+## Aşama 6 — xUnit testleri ve GitHub Actions
+
+### Kavramlar
+
+1. **Birim testi ve entegrasyon testi**: Birim testleri (`UnitTests`) ağ ve veritabanı olmadan tek bir sınıfı sınar; hızlıdır ve kırıldığında sorunun yeri bellidir. Entegrasyon testleri (`IntegrationTests`) parçaları birlikte, gerçek bir veritabanıyla ve HTTP üzerinden sınar. İki ayrı proje, bu iki tür testi karıştırmamak için.
+2. **Bellekte SQLite ve EF InMemory farkı**: EF InMemory ilişkisel değildir; silinmiş bir satırı güncellemenin `DbUpdateConcurrencyException` fırlatması gibi davranışları gerçekçi göstermez. Bellekte SQLite gerçek bir ilişkisel veritabanıdır ve kurulum gerektirmez. Takas: SQL Server değildir; `DateTimeOffset` sıralaması ve `decimal(20,8)` yuvarlaması gibi farklar testlerde görünmez.
+3. **`WebApplicationFactory`**: Gerçek API'yi (`Program.cs` ile) bellekte açar ve gerçek HTTP istekleri atılır. Testte veritabanı SQLite ile değiştirildi, arka plan servisleri kaldırıldı, JWT anahtarı `UseSetting` ile rastgele verildi.
+4. **Elle yazılmış sahte nesneler (fake)**: Moq gibi bir kütüphane yerine `FakeAlertNotificationSender` ve isteği kaydeden bir `HttpMessageHandler`. Sahte sınıf okununca ne yaptığı bellidir; testler gerçek ağa çıkmaz.
+5. **Test edilebilir tasarım**: Alarm işleme `private` bir metottaydı; test etmek için arka plan servisini çalıştırıp beklemek gerekirdi, bu da ara sıra kendiliğinden kırılan testler demektir. Mantık `public` bir `AlertProcessor` sınıfına taşındı; davranış değişmedi, testler doğrudan çağırıyor.
+6. **Sürekli entegrasyon (CI)**: GitHub Actions her push'ta derleme ve testleri temiz bir Linux makinesinde çalıştırır. "Bende çalışıyor" yerine herkesin görebileceği bir sonuç üretir.
+
+### Karşılaşılan sorunlar ve nedenleri
+
+- **Windows testleri engelledi**: Akıllı Uygulama Denetimi yeni derlenen test dll'lerini engelledi. Dosya konumu ve adı değiştirilerek denendi, sonuç değişmedi; kontrol olarak daha önce geçen bir deneme projesi de artık engellendi. Yani karar dosyaya değil zamana veya makine durumuna bağlıydı. Testler CI'a taşındı.
+- **Kilitli dll'ler**: `MSB3021` "dosya başka bir süreç tarafından kullanılıyor" hatası, arka planda açık kalan API'den kaynaklandı. Bu, Windows engelinden ayrı bir sorundu; API kapatılınca çözüldü.
+- **Yarış durumu**: Toplayıcı fiyat partisini kaydetmeden önce kuyruğa koyuyor. Test ikinci partiyi okuyup hemen durdursaydı ikinci kayıt yarıda iptal olabilir, test ara sıra kırılırdı. Durdurmadan önce üçüncü parti beklenerek düzeltildi. Bu sorun bağımsız inceleme sırasında bulundu.
+- **Eksik regresyon koruması**: `triggeredAtUtc` için UTC kontrolü yoktu; o satırdaki düzeltme geri alınsa hiçbir test kırılmazdı. Bu da incelemede bulundu.
+
+### Kontrol soruları
+
+1. Testlerde neden EF InMemory değil SQLite kullanıldı?
+2. Toplayıcı testi neden `Task.Delay` ile beklemek yerine kuyruktan parti okuyor?
+3. Bir regresyon testinin gerçekten işe yaradığından nasıl emin olunur?
+
+## Cevaplar
+
+1. Bildirim sırasında silinen alarm senaryosu, silinmiş satırı güncellemenin gerçekten 0 satır etkileyip `DbUpdateConcurrencyException` fırlatmasına dayanıyor. Bunu ilişkisel bir veritabanı gerçekçi biçimde gösterir; InMemory göstermez.
+2. Süreye dayalı bekleme yavaş makinede yetmeyebilir, hızlı makinede boşa zaman harcar. Kuyruktan bir parti okumak, o döngünün o noktaya geldiğini kesin olarak gösterir.
+3. Düzeltilen hata geçici olarak geri getirilir ve testin kırıldığı görülür (mutation testing). Bu projede inceleme kodu okuyarak yapıldı; hatayı geri getirip CI'da çalıştırmak bir sonraki doğrulama adımı olabilir.

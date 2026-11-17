@@ -12,7 +12,7 @@
 - [~] Aşama 3: BackgroundService, cache, retry ve fiyat kaydı kaynakları yazıldı; canlı doğrulama yapılamadı
 - [x] Aşama 4: Kullanıcı kaydı/girişi, JWT ve takip listesi (yerelde derlendi, migration uygulandı, Swagger'dan test edildi)
 - [x] Aşama 5: Alarm sistemi ve Telegram bildirimi (yerelde derlendi, iki migration uygulandı, uçtan uca denendi, gerçek Telegram mesajı alındı)
-- [ ] Aşama 6: Unit testler
+- [x] Aşama 6: xUnit testleri (birim + entegrasyon) ve GitHub Actions CI; testler CI'da çalışıyor (yerelde Windows engeli)
 - [ ] Aşama 7: Docker, docker-compose ve tamamlanmış dokümantasyon
 
 ## Test durumu
@@ -34,7 +34,15 @@
 - Telegram hata yolu (sahte token): Telegram `401 Unauthorized` döndü, alarmlar aktif kalıp her döngüde tekrar denendi; token'ın gizli kısmı ve `api.telegram.org` adresi logda 0 kez geçti. ChatId'siz kullanıcı için açıklayıcı hata loglandı.
 - `Telegram__ChatId=abc` ile API açılışta `Failed to convert configuration value` hatasıyla durdu.
 - Gerçek Telegram: kullanıcının kendi botuyla Swagger'dan `BTC Above 1` alarmı kuruldu, mesaj Telegram'a geldi.
-- Denenmedi: alarm bildirimi gittikten hemen sonra kullanıcının alarmı silmesi (`DbUpdateConcurrencyException` yolu) ve Telegram 429 (rate limit). Aşama 6'da birim testlerle denenecek.
+- Canlı denenmedi: alarm bildirimi gittikten hemen sonra kullanıcının alarmı silmesi (`DbUpdateConcurrencyException` yolu) ve Telegram 429 (rate limit). İkisi Aşama 6'da testlerle kapsandı.
+
+## Aşama 6 doğrulama
+- Bu makinede Windows Akıllı Uygulama Denetimi yeni derlenen test dll'lerini engelledi. Konum (Masaüstü/geçici klasör) ve dll adı değiştirilerek denendi, sonuç değişmedi; daha önce geçen deneme projesi de sonradan engellendi. Bu yüzden testler GitHub Actions'ta (ubuntu-latest) çalıştırılıyor.
+- `stage-6-tests` dalındaki her push'ta CI çalıştı; her adımda test sayısı arttı ve hepsi geçti (10 → 19 → 24 → 44). Son çalışma sonucu `main`'e birleştirmeden önce kontrol edildi.
+- Testler bağımsız bir incelemeden geçirildi ("düzeltilen hata geri gelirse test kırılır mı?"). İki gerçek açık bulundu ve kapatıldı: toplayıcı testinde ara sıra kırılmaya yol açabilecek bir yarış durumu ve `triggeredAtUtc` için eksik UTC kontrolü.
+- Regresyon testi olan hatalar: TCMB kurlarının önbellekten düşmesi, 8'den fazla ondalığın sessizce yuvarlanması, veritabanından okunan tarihin `Z`siz dönmesi, Telegram adresinin mutlak URI sayılması, bildirim sırasında silinen alarmın partiyi bozması.
+- Kapsanmayanlar: auth ve watchlist endpoint'leri, `/api/price-history` (SQLite `DateTimeOffset` ile sıralayamıyor), SQL Server'a özgü davranışlar (testler SQLite'ta), migration'lar (testlerde `EnsureCreated`).
+- Testlerin bir hatayı gerçekten yakaladığı, hata geri getirilip testin kırıldığı görülerek doğrulanmadı (mutation testing); bu inceleme kodu okuyarak yapıldı.
 
 ## Bilinen sorunlar / varsayımlar
 - CoinGecko ücretsiz API'sinin herkese açık endpoint'i `api.coingecko.com/api/v3/simple/price` kullanılacaktır.
@@ -52,4 +60,4 @@
 
 ## GitHub durumu
 - Public repo: https://github.com/Mahanaim-Virgil/crypto-fx-tracker
-- Her aşama `stage-N` etiketiyle işaretlenir (stage-1 ... stage-5).
+- Her aşama `stage-N` etiketiyle işaretlenir (stage-1 ... stage-6). CI: her push'ta GitHub Actions derleme ve test çalıştırır.

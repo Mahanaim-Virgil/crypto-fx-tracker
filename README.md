@@ -1,10 +1,12 @@
 # Crypto & FX Tracker
 
+[![CI](https://github.com/Mahanaim-Virgil/crypto-fx-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/Mahanaim-Virgil/crypto-fx-tracker/actions/workflows/ci.yml)
+
 Kripto ve döviz fiyatlarını takip eden, kullanıcıların fiyat alarmı kurabildiği bir .NET 8 Web API.
 CoinGecko'dan BTC fiyatını, TCMB'den USD/TRY ve EUR/TRY kurlarını dakikada bir toplar, geçmişi SQL Server'da saklar
 ve kullanıcının belirlediği eşik aşılınca Telegram'dan bildirim gönderir.
 
-**Teknolojiler:** C#, .NET 8, ASP.NET Core (Minimal API), Entity Framework Core, SQL Server, JWT, Swagger, Telegram Bot API
+**Teknolojiler:** C#, .NET 8, ASP.NET Core (Minimal API), Entity Framework Core, SQL Server, JWT, Swagger, Telegram Bot API, xUnit, GitHub Actions
 
 ## Özellikler
 
@@ -103,6 +105,25 @@ Bot token verilmezse alarmlar yine çalışır, bildirimler yalnızca loga yazı
 
 Bağlantı dizesi ve toplama aralığı `src/CryptoFxTracker.Api/appsettings.json` içindedir.
 
+## Testler
+
+```bash
+dotnet test CryptoFxTracker.slnx
+```
+
+Her push'ta GitHub Actions'ta (Ubuntu) derlenir ve çalışır.
+
+| Proje | Ne test ediliyor | Nasıl |
+| --- | --- | --- |
+| `CryptoFxTracker.UnitTests` | `PriceAlert` kuralı (Above `>=`, Below `<=`, tek seferlik), Telegram göndericisi (istek adresi, ChatId seçimi, hata mesajları, Türkçe sayı biçimi) | Ağ ve veritabanı yok; HTTP için isteği kaydeden sahte `HttpMessageHandler` |
+| `CryptoFxTracker.IntegrationTests` | Alarm işleme (bir kez çalma, gönderim hatasında aktif kalma, bildirim sırasında silinen alarm), fiyat toplayıcı, `/api/alerts` ve `/api/users/me/telegram` | Bellekte SQLite; API için `WebApplicationFactory` (arka plan servisleri kapalı, dış servislere istek gitmez) |
+
+Geliştirme sırasında bulunan hataların her biri için bir regresyon testi var (ör. Telegram adresinin mutlak
+URI sayılması, 8'den fazla ondalığın sessizce yuvarlanması, TCMB kurlarının önbellekten düşmesi).
+
+Bilinen sınır: testler SQL Server yerine SQLite'ta çalışır; SQL Server'a özgü davranışlar (ör. `decimal(20,8)`
+yuvarlaması) testlerde doğrulanmaz.
+
 ## Yol haritası
 
 Proje aşamalarla geliştiriliyor; her tamamlanan aşamanın doğrulanmış son commit'i `stage-N` etiketiyle işaretli.
@@ -114,7 +135,7 @@ Proje aşamalarla geliştiriliyor; her tamamlanan aşamanın doğrulanmış son 
 | 3 | Arka plan toplayıcı, önbellek, retry | Tamamlandı (`stage-3`) |
 | 4 | Kayıt/giriş, JWT, takip listesi | Tamamlandı (`stage-4`) |
 | 5 | Fiyat alarmları, Telegram bildirimi | Tamamlandı (`stage-5`) |
-| 6 | xUnit testleri | Planlandı |
+| 6 | xUnit testleri, GitHub Actions CI | Tamamlandı (`stage-6`) |
 | 7 | Docker, docker-compose | Planlandı |
 
 Ayrıntılı ilerleme ve doğrulama notları: [PROGRESS.md](PROGRESS.md). Her aşamada öğrendiklerim: [LEARNING.md](LEARNING.md).

@@ -8,10 +8,11 @@ sağlayıcıları, `PriceCollectorService` (BackgroundService, 60 sn), `IMemoryC
 Swashbuckle, JWT kimlik doğrulama (`PasswordHasher<User>`).
 
 ## Aşamalar
-- Tamamlandı (`stage-1` ... `stage-5` etiketleri): 1 iskelet + CoinGecko,
+- Tamamlandı (`stage-1` ... `stage-6` etiketleri): 1 iskelet + CoinGecko,
   2 EF Core + TCMB, 3 arka plan toplayıcı + cache + retry, 4 kayıt/giriş + JWT + takip listesi,
-  5 fiyat alarmı (`Channel` + `AlertCheckerService`) + Telegram bildirimi.
-- Sıradaki: 6 xUnit testleri, 7 Docker + README + Mimari Kararlar.
+  5 fiyat alarmı (`Channel` + `AlertCheckerService`) + Telegram bildirimi,
+  6 xUnit testleri (birim + SQLite/WebApplicationFactory entegrasyon) + GitHub Actions CI.
+- Sıradaki: 7 Docker + README + Mimari Kararlar.
 - Her aşama bitince `stage-N` etiketi, aşamanın doğrulanmış son commit'ine konur.
 
 ## Geliştirici ve çalışma şekli
@@ -39,6 +40,14 @@ staj/iş. Proje portföy ve mülakat için: "çalışıyor" yetmez, neden öyle 
 
 ## Komutlar
 - Derle: `dotnet build` (kök klasörde).
+- Testler: `tests/CryptoFxTracker.UnitTests` (ağ/DB yok) ve `tests/CryptoFxTracker.IntegrationTests`
+  (bellekte SQLite, `WebApplicationFactory`). Bu makinede Akıllı Uygulama Denetimi test dll'lerini
+  neredeyse her zaman engelliyor; testlerin güvenilir sonucu GitHub Actions'tan gelir
+  (`.github/workflows/ci.yml`, her push'ta). Sonuç: `gh run list --branch <dal>`,
+  `gh run view <id> --log`. Yerelde denemek için: `dotnet build --no-incremental -p:Deterministic=false`,
+  sonra `dotnet test --no-build` (`dotnet test` `--no-incremental` kabul etmez).
+- Testlerde migration değil `EnsureCreated` kullanılır (migration'lar SQL Server'a özgü).
+  SQLite `DateTimeOffset` ile sıralayamaz; `/api/price-history` bu yüzden test edilmiyor.
 - `Jwt__Secret` ortam değişkeni (en az 32 karakter) yoksa API açılmaz ve `dotnet ef` de
   hata verir (`dotnet ef` uygulamayı başlatır). Her yeni cmd penceresinde `set Jwt__Secret=...`
   gerekir. Gizli anahtarı koda, repoya veya belgeye yazma.
@@ -66,7 +75,9 @@ staj/iş. Proje portföy ve mülakat için: "çalışıyor" yetmez, neden öyle 
   verilmez, `IServiceScopeFactory` ile scope açılır.
 
 ## Git
-- Commit mesajı `feat:`, `fix:`, `docs:` önekiyle; küçük ve tek konulu commit.
+- Commit mesajı `feat:`, `fix:`, `docs:`, `test:`, `ci:` önekiyle; küçük ve tek konulu commit.
+- Aşama işleri `stage-N-...` dalında yapılabilir; dal CI'da yeşilse `main`'e birleştirilir.
+  `main`'e birleştirme ve `main` push'u ayrıca onay ister.
 - Push etmeden önce sor. Geçmiş yeniden yazma (force push) ayrıca onay ister.
 - Git kimliği global ayardan gelir (GitHub noreply adresi). Repoya yerel `user.name` veya
   `user.email` yazma.
@@ -75,7 +86,9 @@ staj/iş. Proje portföy ve mülakat için: "çalışıyor" yetmez, neden öyle 
 
 ## Bilinen eksikler
 - Girdi doğrulaması (e-posta biçimi, şifre uzunluğu) test edilmedi.
-- Otomatik test yok (Aşama 6).
+- Testler SQL Server'da değil SQLite'ta çalışıyor; SQL Server'a özgü davranış (ör. `decimal(20,8)`
+  yuvarlaması, `DateTimeOffset` sıralaması) testlerle doğrulanmıyor. Aşama 7'de Testcontainers ile
+  gerçek SQL Server düşünülebilir. Auth ve watchlist endpoint'lerinin testi yok.
 - Takip listesine aynı sembol ikinci kez eklenince 409 değil 200 dönüyor (idempotent, bilinçli).
 - Swagger'da eski endpoint'lerin (auth, watchlist) 401, 409, 204 yanıtları belgelenmemiş;
   `/api/alerts` ve `/api/users/me/telegram` belgelendi.
@@ -84,4 +97,5 @@ staj/iş. Proje portföy ve mülakat için: "çalışıyor" yetmez, neden öyle 
   Bot token varken ChatId'si olmayan (ve varsayılan `Telegram__ChatId` ayarlanmamış) kullanıcının
   alarmı, koşul sağlandığı her fiyat partisinde uyarı loglayarak tekrar denenir. Token yoksa log
   gönderici ChatId'ye bakmaz, alarm bir kez loglanıp pasif olur.
-- Denenmedi: bildirimden hemen sonra alarm silinmesi (`DbUpdateConcurrencyException` yolu), Telegram 429.
+- Bildirimden hemen sonra alarm silinmesi ve Telegram 429 artık testlerle kapsanıyor
+  (`AlertProcessorTests`, `TelegramAlertNotificationSenderTests`); canlı ortamda denenmedi.
