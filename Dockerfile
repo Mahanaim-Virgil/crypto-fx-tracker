@@ -4,6 +4,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
+# Migration bundle için dotnet-ef. Kaynak koddan önce kurulur ki kod değiştiğinde yeniden indirilmesin.
+# Son API imajına girmez (oraya yalnızca /app/publish kopyalanır).
+RUN dotnet tool install --global dotnet-ef --version 8.0.11
+ENV PATH="${PATH}:/root/.dotnet/tools"
+
 # Önce yalnızca proje dosyaları: kod değişip paketler değişmediğinde restore katmanı önbellekten gelir.
 COPY src/CryptoFxTracker.Domain/CryptoFxTracker.Domain.csproj src/CryptoFxTracker.Domain/
 COPY src/CryptoFxTracker.Application/CryptoFxTracker.Application.csproj src/CryptoFxTracker.Application/
@@ -17,8 +22,6 @@ RUN dotnet publish src/CryptoFxTracker.Api/CryptoFxTracker.Api.csproj \
 
 # ---- Migration bundle: migration'ları tek bir çalıştırılabilir dosyaya paketler ----
 FROM build AS bundle
-RUN dotnet tool install --global dotnet-ef --version 8.0.11
-ENV PATH="${PATH}:/root/.dotnet/tools"
 # Başlangıç projesi Infrastructure: EF, DesignTimeDbContextFactory ile DbContext oluşturur ve Program.cs
 # hiç çalışmaz. Derleme ve çalıştırma sırasında Jwt__Secret gibi uygulama ayarları gerekmez.
 RUN dotnet ef migrations bundle \

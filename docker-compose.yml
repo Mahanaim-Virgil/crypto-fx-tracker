@@ -1,10 +1,15 @@
 # Yerel geliştirme ortamı: SQL Server + migration + API.
 # Kullanım: .env.example'ı .env olarak kopyalayıp değerleri doldurun, sonra: docker compose up --build
 # Gizli bilgiler yalnızca .env'den gelir (.env git'e girmez). Eksikse compose başlamaz.
+# Bağlantı dizelerinde şifre tek tırnak içinde: ';' şifreyi kesmez. Şifrede ' " $ # ve boşluk kullanmayın
+# (ayrıntı .env.example'da).
 
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    # API unless-stopped ile yeniden başlıyor; veritabanı da başlamalı, yoksa Docker yeniden
+    # başlayınca API veritabanısız kalır (depends_on yalnızca "compose up" sırasında geçerli).
+    restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?.env dosyasında MSSQL_SA_PASSWORD gerekli}
@@ -24,7 +29,7 @@ services:
       context: .
       target: migrator
     environment:
-      ConnectionStrings__Default: "Server=sqlserver;Database=CryptoFxTracker;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+      ConnectionStrings__Default: "Server=sqlserver;Database=CryptoFxTracker;User Id=sa;Password='${MSSQL_SA_PASSWORD}';TrustServerCertificate=True"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -35,7 +40,7 @@ services:
       context: .
       target: runtime
     environment:
-      ConnectionStrings__Default: "Server=sqlserver;Database=CryptoFxTracker;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+      ConnectionStrings__Default: "Server=sqlserver;Database=CryptoFxTracker;User Id=sa;Password='${MSSQL_SA_PASSWORD}';TrustServerCertificate=True"
       Jwt__Secret: ${Jwt__Secret:?.env dosyasında Jwt__Secret gerekli (en az 32 karakter)}
       Telegram__BotToken: ${Telegram__BotToken:-}
       Telegram__ChatId: ${Telegram__ChatId:-}
