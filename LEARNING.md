@@ -109,3 +109,33 @@
 1. Bildirim sırasında silinen alarm senaryosu, silinmiş satırı güncellemenin gerçekten 0 satır etkileyip `DbUpdateConcurrencyException` fırlatmasına dayanıyor. Bunu ilişkisel bir veritabanı gerçekçi biçimde gösterir; InMemory göstermez.
 2. Süreye dayalı bekleme yavaş makinede yetmeyebilir, hızlı makinede boşa zaman harcar. Kuyruktan bir parti okumak, o döngünün o noktaya geldiğini kesin olarak gösterir.
 3. Düzeltilen hata geçici olarak geri getirilir ve testin kırıldığı görülür (mutation testing). Bu projede inceleme kodu okuyarak yapıldı; hatayı geri getirip CI'da çalıştırmak bir sonraki doğrulama adımı olabilir.
+
+## Aşama 7 — Docker, docker compose ve SQL Server testleri
+
+### Kavramlar
+
+1. **Çok aşamalı Dockerfile**: Derleme SDK imajında yapılır, son imaja yalnızca çıktı ve çalışma zamanı kopyalanır. Önce yalnızca `.csproj` dosyalarını kopyalayıp `restore` etmek, kod değiştiğinde paket katmanının önbellekten gelmesini sağlar.
+2. **Root olmadan çalışmak**: Resmi .NET 8 imajlarında hazır, yetkisiz bir `app` kullanıcısı var (`USER $APP_UID`). Bu yüzden 80 yerine 8080 portu kullanılır.
+3. **Compose'da sıralama**: `depends_on` + `condition: service_healthy` (SQL Server gerçekten sorgu kabul ediyor) ve `service_completed_successfully` (migration başarıyla bitti). Yalnızca `depends_on` container'ın başladığını garanti eder, hazır olduğunu değil.
+4. **EF Core migration bundle**: Migration'lar tek bir çalıştırılabilir dosyaya paketlenir ve API'den önce bir kez çalışır. API açılışında `Migrate()` çağırmaktan daha güvenli: birden fazla örnek aynı anda migration'a girişmez, API'nin şema değiştirme yetkisi gerekmez.
+5. **`IDesignTimeDbContextFactory`**: `dotnet ef` normalde DbContext'i uygulamayı (Program.cs) başlatarak oluşturur. Fabrika varsa ve başlangıç projesi o katmansa EF uygulamayı hiç başlatmaz; uygulama ayarları (JWT anahtarı gibi) gerekmez.
+6. **Sağlık kontrolü**: `/health`, veritabanına bağlanılabiliyor mu diye bakar ve 200 veya 503 döner. "Container çalışıyor" ile "uygulama iş görebiliyor" farklı şeylerdir.
+7. **Testcontainers**: Test sırasında gerçek bir SQL Server container'ı açılır, gerçek migration'lar uygulanır ve test bitince silinir. SQLite'ın göstermediği davranışlar (ör. `decimal(20,8)` yuvarlaması) böyle sınanır.
+
+### Karşılaşılan sorunlar ve nedenleri
+
+- **Veritabanı kapalıyken kaybolan kur**: API'yi veritabanı olmadan container'da çalıştırınca `/api/prices`'ta EURTRY yoktu. Veritabanı kontrolü hata verince TCMB döngüsü yarıda kesiliyordu. Önbellek artık veritabanından önce ve ayrı dolduruluyor. Bu, compose'da SQL Server'ın API'den geç hazır olduğu anlarda da yaşanacak bir durumdu.
+- **Yanıltıcı migrator logu**: Migration'lar başarılı olduğu halde logda "JWT secret yapılandırılmamış" yazıyordu; EF önce Program.cs'i deneyip sonra fabrikaya geçiyordu. Başlangıç projesi Infrastructure yapılınca düzeldi.
+- **Takılan push**: GitHub oturumu geçersiz olunca `git push` hiçbir çıktı vermeden yeniden giriş bekledi. Ağ ve okuma (`git ls-remote`) çalışıyordu; `gh auth status` sebebi gösterdi.
+
+### Kontrol soruları
+
+1. `depends_on` tek başına neden yetmez, `condition: service_healthy` ne ekler?
+2. Migration'ları neden API açılışında değil ayrı bir container'da uyguladık?
+3. Bir regresyon testinin gerçekten işe yaradığını bu aşamada nasıl gösterdik?
+
+## Cevaplar
+
+1. `depends_on` yalnızca diğer container'ın başlatıldığını bekler. SQL Server başladıktan sonra bağlantı kabul etmesi birkaç saniye sürer; sağlık kontrolü (`SELECT 1`) geçene kadar beklemek, migrator'ın hazır olmayan veritabanına bağlanmaya çalışmasını önler.
+2. Birden fazla API örneği aynı anda migration'a girişebilirdi ve API'nin şema değiştirme yetkisi olması gerekirdi. Ayrı container, migration'ı bir kez ve API'den önce çalıştırır; başarısız olursa API hiç başlamaz.
+3. Hatayı container içindeki bir kopyada geri getirip testi çalıştırdık: eski `PriceCollectorService` ile ilgili test kırıldı; migration'ı olmayan bir alan eklenince "unutulmuş migration" testi kırıldı.

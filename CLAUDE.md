@@ -8,11 +8,14 @@ sağlayıcıları, `PriceCollectorService` (BackgroundService, 60 sn), `IMemoryC
 Swashbuckle, JWT kimlik doğrulama (`PasswordHasher<User>`).
 
 ## Aşamalar
-- Tamamlandı (`stage-1` ... `stage-6` etiketleri): 1 iskelet + CoinGecko,
+- Tamamlandı (`stage-1` ... `stage-7` etiketleri): 1 iskelet + CoinGecko,
   2 EF Core + TCMB, 3 arka plan toplayıcı + cache + retry, 4 kayıt/giriş + JWT + takip listesi,
   5 fiyat alarmı (`Channel` + `AlertCheckerService`) + Telegram bildirimi,
-  6 xUnit testleri (birim + SQLite/WebApplicationFactory entegrasyon) + GitHub Actions CI.
-- Sıradaki: 7 Docker + README + Mimari Kararlar.
+  6 xUnit testleri (birim + SQLite/WebApplicationFactory entegrasyon) + GitHub Actions CI,
+  7 Docker (Dockerfile, compose, migration bundle, `/health`) + Testcontainers SQL Server testleri
+  + `docs/MIMARI-KARARLAR.md`.
+- Planlanmış aşama kalmadı. Yeni bir karar alınırsa `docs/MIMARI-KARARLAR.md`'ye aynı biçimde
+  (bağlam, seçenekler, karar, takas) eklenir.
 - Her aşama bitince `stage-N` etiketi, aşamanın doğrulanmış son commit'ine konur.
 
 ## Geliştirici ve çalışma şekli
@@ -37,26 +40,44 @@ staj/iş. Proje portföy ve mülakat için: "çalışıyor" yetmez, neden öyle 
   ile her derlemede farklı dll üret, sonra tekrar dene. `dotnet ef` çalıştırırken `--no-build`
   ver ki geçen dll'ler yeniden derlenip değişmesin.
 - Swagger: `http://localhost:5000/swagger`.
+- Docker Desktop kurulu (kullanıcı klasörüne: `%LOCALAPPDATA%\Programs\DockerDesktop\resources\bin`).
+  Container'lar Linux'ta çalıştığı için Akıllı Uygulama Denetimi onları etkilemez; API ve testler için
+  en güvenilir yerel yol Docker'dır. Docker'dan önce açılmış bir kabukta `docker` PATH'te olmayabilir.
 
 ## Komutlar
 - Derle: `dotnet build` (kök klasörde).
-- Testler: `tests/CryptoFxTracker.UnitTests` (ağ/DB yok) ve `tests/CryptoFxTracker.IntegrationTests`
-  (bellekte SQLite, `WebApplicationFactory`). Bu makinede Akıllı Uygulama Denetimi test dll'lerini
-  neredeyse her zaman engelliyor; testlerin güvenilir sonucu GitHub Actions'tan gelir
-  (`.github/workflows/ci.yml`, her push'ta). Sonuç: `gh run list --branch <dal>`,
-  `gh run view <id> --log`. Yerelde denemek için: `dotnet build --no-incremental -p:Deterministic=false`,
-  sonra `dotnet test --no-build` (`dotnet test` `--no-incremental` kabul etmez).
-- Testlerde migration değil `EnsureCreated` kullanılır (migration'lar SQL Server'a özgü).
-  SQLite `DateTimeOffset` ile sıralayamaz; `/api/price-history` bu yüzden test edilmiyor.
-- `Jwt__Secret` ortam değişkeni (en az 32 karakter) yoksa API açılmaz ve `dotnet ef` de
-  hata verir (`dotnet ef` uygulamayı başlatır). Her yeni cmd penceresinde `set Jwt__Secret=...`
-  gerekir. Gizli anahtarı koda, repoya veya belgeye yazma.
+- Docker ile her şey: kök klasörde `.env` (bkz. `.env.example`; `MSSQL_SA_PASSWORD`, `Jwt__Secret`
+  zorunlu), sonra `docker compose up --build`. Swagger `http://localhost:8080/swagger`, `/health`.
+  Sıra: `sqlserver` (sağlıklı) → `migrator` (EF migration bundle, bir kez) → `api`. SQL Server
+  portu dışarı açık değil. `docker compose down -v` veritabanı volume'unu da siler (geri alınamaz).
+- Testler: `tests/CryptoFxTracker.UnitTests` (ağ/DB yok), `tests/CryptoFxTracker.IntegrationTests`
+  (bellekte SQLite, `WebApplicationFactory`), `tests/CryptoFxTracker.DatabaseTests` (Testcontainers ile
+  gerçek SQL Server; Docker gerekir). Windows'ta `dotnet test` test dll'leri engellendiği için
+  çalışmaz. Güvenilir sonuç GitHub Actions'tan (`gh run list --branch <dal>`, `gh run view <id> --log`)
+  veya yerelde Linux container'ında: repoyu `mcr.microsoft.com/dotnet/sdk:8.0` container'ına salt-okunur
+  bağla, içeride bir kopyaya `cp -r` yap, `bin`/`obj`'yi sil, `dotnet test <proje>.csproj` çalıştır
+  (SDK 8 `.slnx` okuyamaz; projeleri tek tek ver). `DatabaseTests` için container'a Docker soketini de
+  bağla ve Testcontainers'a host'u göster: `-v //var/run/docker.sock:/var/run/docker.sock`
+  `-e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal` (Git Bash'te `MSYS_NO_PATHCONV=1` ile).
+  NuGet önbelleği için `-v cfx-nuget:/root/.nuget/packages` aramaları hızlandırır.
+- `.env` değerlerinde `$`, `'`, `"`, `#`, boşluk kullanma: compose `$`'ı değişken sanar, tırnaklar
+  bağlantı dizesini bozar. Compose'daki bağlantı dizesinde şifre tek tırnak içinde (`;` güvenli).
+- Unit/Integration testlerinde migration değil `EnsureCreated` kullanılır; SQLite `DateTimeOffset` ile
+  sıralayamaz. Gerçek migration'lar ve SQL Server davranışı `DatabaseTests`'te sınanır.
+- `Jwt__Secret` ortam değişkeni (en az 32 karakter) yoksa API açılmaz. Her yeni cmd penceresinde
+  `set Jwt__Secret=...` gerekir. Gizli anahtarı koda, repoya veya belgeye yazma.
+- `dotnet ef` artık `DesignTimeDbContextFactory` kullanır; `--startup-project` olarak Infrastructure
+  verilirse `Program.cs` çalışmaz ve `Jwt__Secret` gerekmez. Bağlantı dizesi `ConnectionStrings__Default`
+  ortam değişkeninden, yoksa LocalDB'den. (Docker'daki bundle derlemesinde doğrulandı; Windows'ta
+  yerelde denenmedi.)
 - Telegram isteğe bağlı: `Telegram__BotToken` (yoksa bildirimler yalnızca loga gider) ve
   `Telegram__ChatId` (varsayılan sohbet, sayı olmalı; değilse API açılmaz). Token istek
   adresinde olduğu için Telegram HttpClient'ının logları kapalı; bunu geri açma. Token ekran
   görüntüsüne girerse BotFather'da `/revoke` ile yenilenmeli.
-- Migration ekle: `dotnet ef migrations add ADI --project src/CryptoFxTracker.Infrastructure --startup-project src/CryptoFxTracker.Api --output-dir Persistence/Migrations`
-- Migration uygula: `dotnet ef database update --project src/CryptoFxTracker.Infrastructure --startup-project src/CryptoFxTracker.Api`
+- Migration ekle: `dotnet ef migrations add ADI --project src/CryptoFxTracker.Infrastructure --startup-project src/CryptoFxTracker.Infrastructure --output-dir Persistence/Migrations`
+- Migration uygula (LocalDB): `dotnet ef database update --project src/CryptoFxTracker.Infrastructure --startup-project src/CryptoFxTracker.Infrastructure`
+  Docker'da migration'ları `migrator` servisi uygular. Yeni migration eklenince `DatabaseTests`'teki
+  "unutulmuş migration" testi model ile snapshot'ı karşılaştırır.
 - Sorgu: `sqlcmd -S "(localdb)\MSSQLLocalDB" -d CryptoFxTracker -C -Q "..."`
 - Migration `dotnet ef` ile üretilir, elle yazılmaz. Migration dosyaları ve
   `CryptoFxTrackerDbContextModelSnapshot.cs` birlikte commit edilir.

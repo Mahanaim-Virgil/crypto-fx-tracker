@@ -13,7 +13,7 @@
 - [x] Aşama 4: Kullanıcı kaydı/girişi, JWT ve takip listesi (yerelde derlendi, migration uygulandı, Swagger'dan test edildi)
 - [x] Aşama 5: Alarm sistemi ve Telegram bildirimi (yerelde derlendi, iki migration uygulandı, uçtan uca denendi, gerçek Telegram mesajı alındı)
 - [x] Aşama 6: xUnit testleri (birim + entegrasyon) ve GitHub Actions CI; testler CI'da çalışıyor (yerelde Windows engeli)
-- [ ] Aşama 7: Docker, docker-compose ve tamamlanmış dokümantasyon
+- [x] Aşama 7: Docker (Dockerfile, docker compose, migration bundle, `/health`), Testcontainers ile SQL Server testleri, Mimari Kararlar belgesi
 
 ## Test durumu
 - Aşama 1 `dotnet build CryptoFxTracker.slnx --no-restore`: başarılı; 0 hata, 0 uyarı.
@@ -24,7 +24,7 @@
 - TCMB satırları artık tekrar yazılmıyor, TCMB için `PriceUsd` NULL, `GET /api/price-history` en yeniden eskiye sıralı.
 - Canlı deneme: API `dotnet <dll> --urls http://localhost:5000` ile çalıştırıldı, Swagger arayüzü açıldı.
 - CoinGecko: fiyat toplayıcı dakikada bir BTC satırı yazıyor (`PriceHistories` tablosunda doğrulandı).
-- Docker: henüz denenmedi (Aşama 7).
+- Docker: Aşama 7'de denendi (aşağıda).
 
 ## Aşama 5 doğrulama (yerel makine)
 - Önbellek düzeltmesi: API iki döngü çalıştırıldı; ikinci döngüde (TCMB satırları zaten varken) `/api/prices` BTC, USDTRY ve EURTRY'nin üçünü de döndürdü.
@@ -44,9 +44,19 @@
 - Kapsanmayanlar: auth ve watchlist endpoint'leri, `/api/price-history` (SQLite `DateTimeOffset` ile sıralayamıyor), SQL Server'a özgü davranışlar (testler SQLite'ta), migration'lar (testlerde `EnsureCreated`).
 - Testlerin bir hatayı gerçekten yakaladığı, hata geri getirilip testin kırıldığı görülerek doğrulanmadı (mutation testing); bu inceleme kodu okuyarak yapıldı.
 
+## Aşama 7 doğrulama
+- API imajı derlendi (348 MB, kullanıcı `app` uid 1654, port 8080). Veritabanı olmadan tek başına çalıştırıldı: Swagger 200, `/health` 503 Unhealthy (beklenen), `/api/prices` 200.
+- Bu denemede bir hata bulundu: veritabanı kontrolü hata verince TCMB döngüsü yarıda kesiliyor, EURTRY önbelleğe girmiyordu. Düzeltildi ve regresyon testi eklendi.
+- `docker compose up --build` iki kez uçtan uca çalıştırıldı (gizli değerler yalnızca o sürecin ortamında, rastgele): SQL Server sağlıklı → migrator 4 migration'ı uygulayıp 0 koduyla çıktı → API başladı; `/health` Healthy, HTTP ile kurulan `BTC Above 1` alarmı çaldı ve pasif oldu, `/api/prices` üç sembolü döndürdü, `/api/price-history` SQL Server'da çalıştı, boş `Telegram__ChatId` ile API açıldı. Deneme sonunda container'lar ve denemenin volume'u silindi.
+- İlk denemede migrator logunda yanıltıcı bir "JWT secret yapılandırılmamış" uyarısı vardı (EF önce `Program.cs`'i deniyordu). Bundle'ın başlangıç projesi Infrastructure yapılınca uyarı kayboldu.
+- Testler yerelde Linux container'ında (`mcr.microsoft.com/dotnet/sdk:8.0`) çalıştırıldı: 19 birim + 28 entegrasyon + 4 SQL Server (Testcontainers, Docker soketi bağlanarak) = 51/51.
+- İki regresyon testinin hatayı gerçekten yakaladığı görüldü: eski `PriceCollectorService` ile "veritabanı kapalıyken kurlar" testi kırıldı; container kopyasında `PriceAlert`'e migration'ı olmayan bir alan eklenince "unutulmuş migration" testi kırıldı.
+- Denenmedi: Windows'ta yerelde `dotnet ef` ile `--startup-project Infrastructure` (aynı yöntem Docker'daki bundle derlemesinde doğrulandı); compose'u Telegram token'ıyla çalıştırmak.
+
 ## Bilinen sorunlar / varsayımlar
 - CoinGecko ücretsiz API'sinin herkese açık endpoint'i `api.coingecko.com/api/v3/simple/price` kullanılacaktır.
-- Ağ veya CoinGecko rate limit'i nedeniyle endpoint çağrısı başarısız olabilir; provider bu hatayı HTTP 502 ile dışarı aktarır.
+- Ağ veya CoinGecko rate limit'i nedeniyle fiyat toplama başarısız olabilir. Aşama 3'ten beri `/api/prices` dış servise gitmez, önbellekten okur; önbellek henüz boşsa 503 döner (Aşama 1'deki "502" davranışı artık geçerli değil).
+- API, SQL Server'a `sa` hesabıyla bağlanıyor (docker compose, yerel geliştirme); üretim için yalnızca gerekli yetkileri olan ayrı bir kullanıcı gerekir.
 - Aşama 3'te entity/schema değişmediği için yeni migration gerekmedi; mevcut Aşama 2 migration'ı kullanılıyor.
 - `PriceUpdate:IntervalSeconds` varsayılanı 60, retry sayısı 3, retry gecikmesi 2 saniyedir.
 - Aşama 4'te `PriceUsd` nullable yapıldı ve TCMB aynı `Symbol + RecordedAtUtc` kaydını tekrar eklemiyor.
@@ -60,4 +70,4 @@
 
 ## GitHub durumu
 - Public repo: https://github.com/Mahanaim-Virgil/crypto-fx-tracker
-- Her aşama `stage-N` etiketiyle işaretlenir (stage-1 ... stage-6). CI: her push'ta GitHub Actions derleme ve test çalıştırır.
+- Her aşama `stage-N` etiketiyle işaretlenir (stage-1 ... stage-7). CI: her push'ta GitHub Actions derleme ve test çalıştırır.

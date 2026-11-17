@@ -42,6 +42,8 @@ PriceCollectorService ──(60 sn)──> CoinGecko / TCMB
 
 ### Tasarım kararları
 
+Bütün kararlar, seçenekleri ve takaslarıyla: [docs/MIMARI-KARARLAR.md](docs/MIMARI-KARARLAR.md). Özetle:
+
 - **Toplayıcı ile alarm kontrolü bir kuyrukla ayrıldı.** Fiyat toplayıcı her partiyi kapasitesi 1 olan bir
   `Channel`'a bırakır ve beklemez; alarm servisi kendi hızında okur. Bildirim yavaşlarsa fiyat toplama etkilenmez.
   Takas: alarm servisi geride kalırsa ara partiler atlanır, sadece en güncel fiyat kontrol edilir.
@@ -72,12 +74,33 @@ PriceCollectorService ──(60 sn)──> CoinGecko / TCMB
 
 ## Çalıştırma
 
-Gereksinimler: .NET 8 SDK, SQL Server LocalDB (Visual Studio ile gelir), `dotnet-ef` aracı.
-
 ```bash
 git clone https://github.com/Mahanaim-Virgil/crypto-fx-tracker.git
 cd crypto-fx-tracker
 ```
+
+### Docker ile (önerilen)
+
+Gereksinim: Docker (Docker Desktop). SQL Server, migration'lar ve API tek komutla kalkar.
+
+1. `.env.example` dosyasını `.env` adıyla kopyalayın ve en az `MSSQL_SA_PASSWORD` (büyük/küçük harf, rakam,
+   sembol) ile `Jwt__Secret` (en az 32 karakter) değerlerini doldurun. `.env` git'e girmez.
+   Değerlerde `$`, `'`, `"`, `#` ve boşluk kullanmayın: compose `$`'ı değişken sanıp siler, tırnaklar bağlantı
+   dizesini bozar. Güvenli semboller `.env.example`'da listeli.
+2. Başlatın:
+
+```bash
+docker compose up --build
+```
+
+Sıra: SQL Server sağlıklı olunca `migrator` migration'ları uygular ve çıkar, ardından API başlar.
+Swagger: http://localhost:8080/swagger, sağlık kontrolü: http://localhost:8080/health.
+Durdurmak için `docker compose down` (veritabanı volume'u kalır; silmek için `docker compose down -v`).
+
+### Docker olmadan (Windows, LocalDB)
+
+Gereksinimler: .NET SDK 9.0.200 veya üstü (çözüm dosyası `.slnx` biçiminde; SDK 8 bunu okuyamaz) ve .NET 8
+çalışma zamanı, SQL Server LocalDB (Visual Studio ile gelir), `dotnet-ef` aracı.
 
 JWT anahtarını en az 32 karakter olacak şekilde ortam değişkeni olarak verin (Windows `cmd`):
 
@@ -88,7 +111,7 @@ set Jwt__Secret=buraya-en-az-32-karakterlik-rastgele-bir-anahtar
 Veritabanını oluşturup API'yi başlatın:
 
 ```bash
-dotnet ef database update --project src/CryptoFxTracker.Infrastructure --startup-project src/CryptoFxTracker.Api
+dotnet ef database update --project src/CryptoFxTracker.Infrastructure --startup-project src/CryptoFxTracker.Infrastructure
 dotnet run --project src/CryptoFxTracker.Api --urls http://localhost:5000
 ```
 
@@ -111,18 +134,19 @@ Bağlantı dizesi ve toplama aralığı `src/CryptoFxTracker.Api/appsettings.jso
 dotnet test CryptoFxTracker.slnx
 ```
 
-Her push'ta GitHub Actions'ta (Ubuntu) derlenir ve çalışır.
+Her push'ta GitHub Actions'ta (Ubuntu) derlenir ve çalışır. Çözüm dosyası `.slnx` olduğu için SDK 9.0.200 veya
+üstü gerekir (SDK 8 ile projeleri tek tek verin: `dotnet test tests/CryptoFxTracker.UnitTests/CryptoFxTracker.UnitTests.csproj`).
+`CryptoFxTracker.DatabaseTests` Docker gerektirir.
 
 | Proje | Ne test ediliyor | Nasıl |
 | --- | --- | --- |
 | `CryptoFxTracker.UnitTests` | `PriceAlert` kuralı (Above `>=`, Below `<=`, tek seferlik), Telegram göndericisi (istek adresi, ChatId seçimi, hata mesajları, Türkçe sayı biçimi) | Ağ ve veritabanı yok; HTTP için isteği kaydeden sahte `HttpMessageHandler` |
 | `CryptoFxTracker.IntegrationTests` | Alarm işleme (bir kez çalma, gönderim hatasında aktif kalma, bildirim sırasında silinen alarm), fiyat toplayıcı, `/api/alerts` ve `/api/users/me/telegram` | Bellekte SQLite; API için `WebApplicationFactory` (arka plan servisleri kapalı, dış servislere istek gitmez) |
+| `CryptoFxTracker.DatabaseTests` | Migration'ların boş SQL Server'a uygulanması, unutulmuş migration kontrolü, `decimal(20,8)` yuvarlaması, `DateTimeOffset` sıralaması | Testcontainers ile gerçek SQL Server 2022 container'ı |
 
 Geliştirme sırasında bulunan hataların her biri için bir regresyon testi var (ör. Telegram adresinin mutlak
-URI sayılması, 8'den fazla ondalığın sessizce yuvarlanması, TCMB kurlarının önbellekten düşmesi).
-
-Bilinen sınır: testler SQL Server yerine SQLite'ta çalışır; SQL Server'a özgü davranışlar (ör. `decimal(20,8)`
-yuvarlaması) testlerde doğrulanmaz.
+URI sayılması, 8'den fazla ondalığın sessizce yuvarlanması, TCMB kurlarının önbellekten düşmesi, veritabanı
+kapalıyken kurların önbelleğe girmemesi). Sonuncusunun, hatalı kod geri getirildiğinde gerçekten kırıldığı görüldü.
 
 ## Yol haritası
 
@@ -136,6 +160,7 @@ Proje aşamalarla geliştiriliyor; her tamamlanan aşamanın doğrulanmış son 
 | 4 | Kayıt/giriş, JWT, takip listesi | Tamamlandı (`stage-4`) |
 | 5 | Fiyat alarmları, Telegram bildirimi | Tamamlandı (`stage-5`) |
 | 6 | xUnit testleri, GitHub Actions CI | Tamamlandı (`stage-6`) |
-| 7 | Docker, docker-compose | Planlandı |
+| 7 | Docker, docker compose, SQL Server testleri, Mimari Kararlar | Tamamlandı (`stage-7`) |
 
 Ayrıntılı ilerleme ve doğrulama notları: [PROGRESS.md](PROGRESS.md). Her aşamada öğrendiklerim: [LEARNING.md](LEARNING.md).
+Mimari kararlar: [docs/MIMARI-KARARLAR.md](docs/MIMARI-KARARLAR.md).
