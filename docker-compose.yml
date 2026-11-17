@@ -1,0 +1,50 @@
+# Yerel geliştirme ortamı: SQL Server + migration + API.
+# Kullanım: .env.example'ı .env olarak kopyalayıp değerleri doldurun, sonra: docker compose up --build
+# Gizli bilgiler yalnızca .env'den gelir (.env git'e girmez). Eksikse compose başlamaz.
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?.env dosyasında MSSQL_SA_PASSWORD gerekli}
+    # Port dışarı açılmaz: veritabanına yalnızca compose ağındaki container'lar erişir.
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Migration'ları bir kez uygular ve çıkar. API ancak bu başarıyla bitince başlar.
+  migrator:
+    build:
+      context: .
+      target: migrator
+    environment:
+      ConnectionStrings__Default: "Server=sqlserver;Database=CryptoFxTracker;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      target: runtime
+    environment:
+      ConnectionStrings__Default: "Server=sqlserver;Database=CryptoFxTracker;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+      Jwt__Secret: ${Jwt__Secret:?.env dosyasında Jwt__Secret gerekli (en az 32 karakter)}
+      Telegram__BotToken: ${Telegram__BotToken:-}
+      Telegram__ChatId: ${Telegram__ChatId:-}
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  mssql-data:
