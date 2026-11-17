@@ -9,7 +9,10 @@ public sealed record AlertNotification(
     string Condition,
     decimal TargetPriceTry,
     decimal CurrentPriceTry,
-    DateTimeOffset PriceRetrievedAtUtc);
+    DateTimeOffset PriceRetrievedAtUtc,
+    long? TelegramChatId);
+
+public sealed record SetTelegramChatIdRequest(long? ChatId);
 
 public sealed record PriceAlertResponse(
     long Id,

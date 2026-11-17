@@ -19,8 +19,8 @@ public static class DependencyInjection
         services.Configure<PriceUpdateOptions>(configuration.GetSection(PriceUpdateOptions.SectionName));
         services.AddHostedService<PriceCollectorService>();
         services.AddSingleton<PriceUpdateChannel>();
-        services.AddSingleton<IAlertNotificationSender, LoggingAlertNotificationSender>();
         services.AddHostedService<AlertCheckerService>();
+        AddAlertNotifications(services, configuration);
         services.AddAuth(configuration);
 
         services.AddDbContext<CryptoFxTrackerDbContext>(options =>
@@ -39,5 +39,30 @@ public static class DependencyInjection
         });
 
         return services;
+    }
+
+    // Bot token varsa Telegram, yoksa log gönderici: Telegram kurmadan da alarm akışı çalışır.
+    private static void AddAlertNotifications(IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection(TelegramOptions.SectionName);
+        // ValidateOnStart: Telegram__ChatId sayı değilse uygulama açılışta net bir hatayla durur;
+        // aksi halde hata ancak ilk bildirimde, her alarm için tekrar tekrar ortaya çıkardı.
+        services.AddOptions<TelegramOptions>()
+            .Bind(section)
+            .ValidateOnStart();
+
+        if (string.IsNullOrWhiteSpace(section[nameof(TelegramOptions.BotToken)]))
+        {
+            services.AddSingleton<IAlertNotificationSender, LoggingAlertNotificationSender>();
+            return;
+        }
+
+        services.AddHttpClient<IAlertNotificationSender, TelegramAlertNotificationSender>(client =>
+            {
+                client.BaseAddress = new Uri("https://api.telegram.org/");
+                client.Timeout = TimeSpan.FromSeconds(10);
+            })
+            // Varsayılan HttpClient logları istek adresini yazar; Telegram'da adres bot token'ını içerir.
+            .RemoveAllLoggers();
     }
 }

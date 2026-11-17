@@ -182,6 +182,7 @@ app.MapDelete("/api/watchlist/{symbol}", async (string symbol, ClaimsPrincipal u
 .WithTags("Watchlist");
 
 app.MapAlertEndpoints();
+app.MapUserEndpoints();
 
 app.Run();
 

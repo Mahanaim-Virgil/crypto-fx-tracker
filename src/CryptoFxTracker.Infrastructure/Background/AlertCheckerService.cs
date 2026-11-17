@@ -17,7 +17,11 @@ public sealed class AlertCheckerService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("Alarm kontrol servisi başladı.");
+        using (var scope = scopeFactory.CreateScope())
+        {
+            var senderName = scope.ServiceProvider.GetRequiredService<IAlertNotificationSender>().GetType().Name;
+            logger.LogInformation("Alarm kontrol servisi başladı. Bildirim gönderici: {Sender}", senderName);
+        }
 
         try
         {
@@ -55,6 +59,7 @@ public sealed class AlertCheckerService(
         // Koşul karşılaştırması bilerek SQL'de değil, entity'deki tek kuralda (IsTriggeredBy) yapılıyor.
         // Takas: o sembolün bütün aktif alarmları belleğe okunur; alarm sayısı çok büyürse SQL'e taşınmalı.
         var candidates = await dbContext.PriceAlerts
+            .Include(alert => alert.User)
             .Where(alert => alert.IsActive && symbols.Contains(alert.Symbol))
             .ToListAsync(cancellationToken);
 
@@ -80,7 +85,8 @@ public sealed class AlertCheckerService(
                     Condition: alert.Condition.ToString(),
                     TargetPriceTry: alert.TargetPriceTry,
                     CurrentPriceTry: price.Try,
-                    PriceRetrievedAtUtc: price.RetrievedAtUtc), cancellationToken);
+                    PriceRetrievedAtUtc: price.RetrievedAtUtc,
+                    TelegramChatId: alert.User.TelegramChatId), cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
