@@ -2,9 +2,9 @@
 
 Kripto ve döviz fiyatlarını takip eden, kullanıcıların fiyat alarmı kurabildiği bir .NET 8 Web API.
 CoinGecko'dan BTC fiyatını, TCMB'den USD/TRY ve EUR/TRY kurlarını dakikada bir toplar, geçmişi SQL Server'da saklar
-ve kullanıcının belirlediği eşik aşılınca alarm üretir.
+ve kullanıcının belirlediği eşik aşılınca Telegram'dan bildirim gönderir.
 
-**Teknolojiler:** C#, .NET 8, ASP.NET Core (Minimal API), Entity Framework Core, SQL Server, JWT, Swagger
+**Teknolojiler:** C#, .NET 8, ASP.NET Core (Minimal API), Entity Framework Core, SQL Server, JWT, Swagger, Telegram Bot API
 
 ## Özellikler
 
@@ -14,6 +14,8 @@ ve kullanıcının belirlediği eşik aşılınca alarm üretir.
 - JWT ile kayıt ve giriş, `PasswordHasher` ile şifre hash'leme
 - Kullanıcıya özel takip listesi
 - Fiyat alarmları: "USDTRY 45 TL'nin üstüne çıkınca" gibi TL bazlı koşullar (`Above` / `Below`), arka planda kontrol
+- Tek seferlik alarm: koşul sağlanınca Telegram mesajı gider, alarm pasif olur; bildirim gitmezse sonraki fiyatta tekrar denenir
+- Kullanıcıya özel Telegram sohbeti; bot token verilmezse bildirimler yalnızca loga yazılır
 
 ## Mimari
 
@@ -31,7 +33,9 @@ PriceCollectorService ──(60 sn)──> CoinGecko / TCMB
         │  fiyatları yazar
         ├──> SQL Server (PriceHistories)
         ├──> IMemoryCache ──> GET /api/prices
-        └──> PriceUpdateChannel ──> AlertCheckerService ──> bildirim gönderici
+        └──> PriceUpdateChannel ──> AlertCheckerService ──> IAlertNotificationSender
+                                                                ├── Telegram (bot token varsa)
+                                                                └── Log (yoksa)
 ```
 
 ### Tasarım kararları
@@ -43,7 +47,10 @@ PriceCollectorService ──(60 sn)──> CoinGecko / TCMB
   olduğu için her döngüde `IServiceScopeFactory` ile yeni scope açılır.
 - **Alarm koşulu entity'de.** "Tetiklendi mi?" kuralı SQL'de değil `PriceAlert.IsTriggeredBy` içinde, tek yerde.
   Takas: bir sembolün tüm aktif alarmları belleğe okunur; alarm sayısı çok büyürse sorgu SQL'e taşınmalı.
-- **Gizli anahtarlar kodda yok.** JWT anahtarı `Jwt__Secret` ortam değişkeninden okunur; yoksa uygulama başlamaz.
+- **Alarm, bildirim gittikten sonra pasif olur (en az bir kez teslim).** Her alarm ayrı kaydedilir. Kayıt başarısız
+  olursa aynı bildirim iki kez gidebilir; hiç gitmemesi daha kötü olduğu için bu takas kabul edildi.
+- **Gizli anahtarlar kodda yok.** JWT anahtarı `Jwt__Secret`, Telegram bot token'ı `Telegram__BotToken` ortam
+  değişkeninden okunur. Telegram'da token istek adresinin içinde olduğu için o istemcinin HTTP logları kapatıldı.
 
 ## Uç noktalar
 
@@ -59,6 +66,7 @@ PriceCollectorService ──(60 sn)──> CoinGecko / TCMB
 | POST | `/api/alerts` | JWT | Alarm oluştur |
 | GET | `/api/alerts` | JWT | Alarmları listele |
 | DELETE | `/api/alerts/{id}` | JWT | Alarm sil |
+| PUT | `/api/users/me/telegram` | JWT | Bildirimlerin gideceği Telegram ChatId'sini ayarla (`null` ile kaldır) |
 
 ## Çalıştırma
 
@@ -84,6 +92,15 @@ dotnet run --project src/CryptoFxTracker.Api --urls http://localhost:5000
 
 Swagger: http://localhost:5000/swagger — giriş yaptıktan sonra dönen token'ı **Authorize** butonuna yapıştırın.
 
+Telegram bildirimi isteğe bağlıdır. @BotFather'dan bir bot açın, bota `/start` yazın ve API'yi başlatmadan önce:
+
+```bat
+set Telegram__BotToken=botfather-tokeni
+set Telegram__ChatId=varsayilan-sohbet-id
+```
+
+Bot token verilmezse alarmlar yine çalışır, bildirimler yalnızca loga yazılır. Değişkenlerin açıklaması: [.env.example](.env.example).
+
 Bağlantı dizesi ve toplama aralığı `src/CryptoFxTracker.Api/appsettings.json` içindedir.
 
 ## Yol haritası
@@ -96,7 +113,7 @@ Proje aşamalarla geliştiriliyor; her tamamlanan aşamanın doğrulanmış son 
 | 2 | EF Core, fiyat geçmişi, TCMB | Tamamlandı (`stage-2`) |
 | 3 | Arka plan toplayıcı, önbellek, retry | Tamamlandı (`stage-3`) |
 | 4 | Kayıt/giriş, JWT, takip listesi | Tamamlandı (`stage-4`) |
-| 5 | Fiyat alarmları, Telegram bildirimi | Sürüyor: alarmlar hazır, Telegram geliştiriliyor |
+| 5 | Fiyat alarmları, Telegram bildirimi | Tamamlandı (`stage-5`) |
 | 6 | xUnit testleri | Planlandı |
 | 7 | Docker, docker-compose | Planlandı |
 

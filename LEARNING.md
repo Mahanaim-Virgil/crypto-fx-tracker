@@ -49,3 +49,33 @@
 
 1. Kaynak kodu veya repository sızarsa token üretme anahtarı da sızar. Secret ortam değişkeni veya güvenli secret store üzerinden verilmelidir.
 2. Aynı kullanıcının aynı sembolü birden fazla kez takip listesine eklemesini engeller.
+
+## Aşama 5 — Fiyat alarmları ve Telegram bildirimi
+
+### Kavramlar
+
+1. **Channel (üretici/tüketici kuyruğu)**: `PriceCollectorService` her fiyat partisini `System.Threading.Channels` ile bir kuyruğa bırakır, `AlertCheckerService` oradan okur. Kapasite 1 ve `DropOldest` seçildi: toplayıcı hiç beklemez, alarm servisi geride kalırsa yalnızca en güncel fiyat işlenir. Mülakatta, iki işin birbirinin hızına bağlanmaması (decoupling) ve geri basınç (backpressure) stratejisi olarak anlatılabilir.
+2. **İş kuralının entity'de olması**: "Alarm bu fiyatta çalar mı?" kuralı `PriceAlert.IsTriggeredBy` içinde. Veritabanı, ağ veya DI olmadan test edilebilir ve tek yerde durur. Takas: bir sembolün tüm aktif alarmları belleğe okunur.
+3. **En az bir kez (at-least-once) teslim**: Alarm, bildirim gittikten sonra ve her biri ayrı kaydedilerek pasif yapılır. Kayıt başarısız olursa bildirim tekrar gidebilir; bildirimin hiç gitmemesi daha kötü olduğu için bu takas kabul edildi.
+4. **Arayüz arkasında dış servis**: `IAlertNotificationSender` sayesinde bot token yoksa loga yazan gönderici, varsa Telegram göndericisi kullanılır. Telegram kurmadan da akış uçtan uca çalışır ve Aşama 6'da sahte (fake) gönderici ile test edilebilir.
+5. **Gizli bilgiyi loglardan uzak tutmak**: Telegram'da bot token istek adresinin içinde. `IHttpClientFactory` varsayılan olarak her isteğin adresini loglar; Telegram istemcisinde bu loglar `RemoveAllLoggers()` ile kapatıldı.
+
+### Karşılaşılan hatalar ve nedenleri
+
+- **Önbellekten düşen kurlar**: TCMB kuru veritabanında zaten varsa `continue` ile atlanıyor, bu da önbelleğe eklenmeden önce oluyordu. Günün ilk döngüsünden sonra `/api/prices` yalnızca BTC döndürüyordu. Kur artık veritabanı kontrolünden önce önbelleğe ekleniyor.
+- **Sessizce yuvarlanan hedef fiyat**: Kolon `decimal(20,8)`; `0.000000001` doğrulamayı geçip veritabanına 0 olarak yazılıyordu. 8'den fazla ondalık basamak artık 400 ile reddediliyor.
+- **"Z"siz tarih**: EF Core `datetime2` okurken `DateTimeKind.Unspecified` döndürüyor; JSON'da `Z` eksik kalıyordu. Yanıtta tarih UTC olarak işaretleniyor.
+- **Mutlak sayılan Telegram adresi**: `bot123456:ABC.../sendMessage`, .NET'te `bot123456:` şemalı mutlak adres sayılıyor ve `BaseAddress` yok sayılıyordu; gerçek token'la hiçbir mesaj gitmezdi. Adresin başına `/` eklendi. Bu hata kod çalıştırılmadan, bağımsız kod incelemesinde bulundu.
+- **Windows Akıllı Uygulama Denetimi**: Yeniden derlenen dll'ler engellendi (`0x800711C7`). Deterministik derleme her seferinde aynı dosyayı ürettiği için tekrar denemek işe yaramadı; `dotnet build --no-incremental -p:Deterministic=false` ile her derlemede farklı dosya üretilerek aşıldı.
+
+### Kontrol soruları
+
+1. Kuyruk kapasitesi 1 ve `DropOldest` olduğunda alarm servisi yavaşlarsa ne olur?
+2. Alarm neden bildirim gönderilmeden önce değil, gönderildikten sonra pasif yapılıyor?
+3. Bot token'ı istek adresinde taşıyan bir API kullanırken nelere dikkat edilmeli?
+
+## Cevaplar
+
+1. Toplayıcı beklemez; kuyruktaki eski parti atılır ve alarm servisi sıradaki okumada en güncel fiyatı görür. Ara fiyatlar kontrol edilmez, bu kabul edilen bir takastır.
+2. Önce pasif yapılsaydı ve gönderim başarısız olsaydı, kullanıcı hiç haber almazdı. Sonra pasif yapıldığı için en kötü durumda aynı bildirim iki kez gider.
+3. İstek adresini yazan HTTP logları kapatılmalı, hata mesajlarına adres yazılmamalı ve token yalnızca ortam değişkeninden okunmalı. Token sızarsa (örneğin bir ekran görüntüsünde) BotFather'da `/revoke` ile hemen yenilenmeli.
