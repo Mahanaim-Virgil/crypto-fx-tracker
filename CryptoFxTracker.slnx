@@ -6,6 +6,7 @@
     <Project Path="src/CryptoFxTracker.Infrastructure/CryptoFxTracker.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/CryptoFxTracker.IntegrationTests/CryptoFxTracker.IntegrationTests.csproj" />
     <Project Path="tests/CryptoFxTracker.UnitTests/CryptoFxTracker.UnitTests.csproj" />
   </Folder>
 </Solution>

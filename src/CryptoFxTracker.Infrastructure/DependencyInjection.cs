@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.Configure<PriceUpdateOptions>(configuration.GetSection(PriceUpdateOptions.SectionName));
         services.AddHostedService<PriceCollectorService>();
         services.AddSingleton<PriceUpdateChannel>();
+        services.AddScoped<AlertProcessor>();
         services.AddHostedService<AlertCheckerService>();
         AddAlertNotifications(services, configuration);
         services.AddAuth(configuration);
