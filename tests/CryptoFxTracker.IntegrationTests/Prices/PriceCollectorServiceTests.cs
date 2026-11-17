@@ -67,6 +67,11 @@ public sealed class PriceCollectorServiceTests : IDisposable
             Assert.True(cache.TryGetValue(PriceCacheKeys.CurrentPrices, out IReadOnlyCollection<PriceQuote>? cached));
             Assert.Contains(cached!, price => price.Symbol == "USDTRY" && price.Try == 50.2282m);
             Assert.Contains(cached!, price => price.Symbol == "EURTRY");
+
+            // Toplayıcı partiyi kuyruğa koyup SONRA kaydediyor. Durdurmadan önce bir parti daha beklenir:
+            // üçüncü döngü ancak ikincinin kaydı bitince başlar. Yoksa StopAsync ikinci kaydı yarıda
+            // iptal edebilir ve aşağıdaki BTC sayımı ara sıra kırılır.
+            await channel.Reader.ReadAsync(timeout.Token);
         }
         finally
         {

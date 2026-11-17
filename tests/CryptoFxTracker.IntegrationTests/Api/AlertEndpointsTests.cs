@@ -99,6 +99,28 @@ public sealed class AlertEndpointsTests : IDisposable
     }
 
     [Fact]
+    public async Task List_ReturnsTriggeredDateMarkedAsUtc_ForFiredAlert()
+    {
+        // createdAtUtc ile triggeredAtUtc ayrı ayrı UTC işaretleniyor; ikincisi de korunmalı.
+        // API testlerinde arka plan servisi kapalı olduğu için alarm veritabanında elle "çaldırılıyor".
+        var client = await factory.CreateAuthenticatedClientAsync();
+        var created = await (await client.PostAsync("/api/alerts", Json("""{"symbol":"BTC","condition":"Above","targetPriceTry":1}""")))
+            .Content.ReadFromJsonAsync<PriceAlertResponse>();
+        await factory.QueryAsync(async db =>
+        {
+            var alert = await db.PriceAlerts.SingleAsync(item => item.Id == created!.Id);
+            alert.MarkTriggered(3_739_253m, DateTime.UtcNow);
+            return await db.SaveChangesAsync();
+        });
+
+        var json = JsonDocument.Parse(await client.GetStringAsync("/api/alerts")).RootElement;
+
+        Assert.False(json[0].GetProperty("isActive").GetBoolean());
+        Assert.Equal(3_739_253m, json[0].GetProperty("triggeredPriceTry").GetDecimal());
+        Assert.EndsWith("Z", json[0].GetProperty("triggeredAtUtc").GetString());
+    }
+
+    [Fact]
     public async Task Delete_OtherUsersAlert_Returns404_AndKeepsIt()
     {
         // 403 değil 404: başka kullanıcının alarm id'sinin var olduğu sızdırılmaz.
