@@ -14,6 +14,9 @@ public sealed class TelegramAlertNotificationSender(
     HttpClient httpClient,
     IOptions<TelegramOptions> options) : IAlertNotificationSender
 {
+    // DI'daki HttpClient bu adresi kullanır; testler de aynı sabiti kullanır ki ikisi ayrışmasın.
+    public static readonly Uri ApiBaseAddress = new("https://api.telegram.org/");
+
     private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
 
     public async Task SendAsync(AlertNotification notification, CancellationToken cancellationToken)

@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CryptoFxTracker.Domain\CryptoFxTracker.Domain.csproj" />
+    <ProjectReference Include="..\..\src\CryptoFxTracker.Infrastructure\CryptoFxTracker.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

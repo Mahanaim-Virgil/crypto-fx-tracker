@@ -59,7 +59,7 @@ public static class DependencyInjection
 
         services.AddHttpClient<IAlertNotificationSender, TelegramAlertNotificationSender>(client =>
             {
-                client.BaseAddress = new Uri("https://api.telegram.org/");
+                client.BaseAddress = TelegramAlertNotificationSender.ApiBaseAddress;
                 client.Timeout = TimeSpan.FromSeconds(10);
             })
             // Varsayılan HttpClient logları istek adresini yazar; Telegram'da adres bot token'ını içerir.
