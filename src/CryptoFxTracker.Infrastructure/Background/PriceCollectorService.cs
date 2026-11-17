@@ -84,50 +84,65 @@ public sealed class PriceCollectorService(
             logger.LogError(exception, "CoinGecko fiyatı alınamadı; TCMB ve sonraki döngü devam edecek.");
         }
 
+        IReadOnlyCollection<CurrencyRate>? rates = null;
         try
         {
-            var rates = await ExecuteWithRetryAsync(
+            rates = await ExecuteWithRetryAsync(
                 () => tcmb.GetTodayRatesAsync(cancellationToken),
                 "TCMB",
                 settings,
                 cancellationToken);
-
-            foreach (var rate in rates)
-            {
-                var symbol = $"{rate.CurrencyCode}TRY";
-                var recordedAtUtc = new DateTimeOffset(DateOnly.FromDateTime(rate.RateDate), TimeOnly.MinValue, TimeSpan.Zero);
-
-                // Önbellek her döngüde baştan yazıldığı için kur, veritabanında zaten olsa da
-                // önbelleğe eklenmeli; yoksa günün ilk döngüsünden sonra önbellekten düşer.
-                currentPrices.Add(new PriceQuote(
-                    Symbol: symbol,
-                    Usd: 1m,
-                    Try: rate.TryValue,
-                    RetrievedAtUtc: DateTimeOffset.UtcNow,
-                    Provider: rate.Provider));
-
-                var exists = await dbContext.PriceHistories.AnyAsync(
-                    price => price.Symbol == symbol && price.RecordedAtUtc == recordedAtUtc,
-                    cancellationToken);
-
-                if (exists)
-                {
-                    continue;
-                }
-
-                dbContext.PriceHistories.Add(new PriceHistory
-                {
-                    Symbol = symbol,
-                    Provider = rate.Provider,
-                    PriceUsd = null,
-                    PriceTry = rate.TryValue,
-                    RecordedAtUtc = recordedAtUtc
-                });
-            }
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.LogError(exception, "TCMB kurları alınamadı; CoinGecko kaydı ve sonraki döngü devam edecek.");
+        }
+
+        if (rates is not null)
+        {
+            // Önce önbellek: önbellek her döngüde baştan yazıldığı için kurlar, veritabanında zaten
+            // olsalar da eklenmeli. Veritabanı kontrolünden ÖNCE ve ayrı yapılır ki veritabanına
+            // ulaşılamadığında (ör. container'da SQL Server henüz açılmamışken) kurlar önbellekten düşmesin.
+            foreach (var rate in rates)
+            {
+                currentPrices.Add(new PriceQuote(
+                    Symbol: $"{rate.CurrencyCode}TRY",
+                    Usd: 1m,
+                    Try: rate.TryValue,
+                    RetrievedAtUtc: DateTimeOffset.UtcNow,
+                    Provider: rate.Provider));
+            }
+
+            try
+            {
+                // Aynı yayın tarihli kur veritabanına bir kez yazılır.
+                foreach (var rate in rates)
+                {
+                    var symbol = $"{rate.CurrencyCode}TRY";
+                    var recordedAtUtc = new DateTimeOffset(DateOnly.FromDateTime(rate.RateDate), TimeOnly.MinValue, TimeSpan.Zero);
+                    var exists = await dbContext.PriceHistories.AnyAsync(
+                        price => price.Symbol == symbol && price.RecordedAtUtc == recordedAtUtc,
+                        cancellationToken);
+
+                    if (exists)
+                    {
+                        continue;
+                    }
+
+                    dbContext.PriceHistories.Add(new PriceHistory
+                    {
+                        Symbol = symbol,
+                        Provider = rate.Provider,
+                        PriceUsd = null,
+                        PriceTry = rate.TryValue,
+                        RecordedAtUtc = recordedAtUtc
+                    });
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogError(exception, "TCMB kurları veritabanında kontrol edilemedi; kurlar önbellekte, kayıt sonraki döngüde denenecek.");
+            }
         }
 
         if (currentPrices.Count > 0)
