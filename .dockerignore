@@ -1,0 +1,17 @@
+# Derleme çıktıları: imaj içinde Linux için yeniden üretilir.
+**/bin/
+**/obj/
+
+# Gizli bilgiler asla imaja girmemeli.
+.env
+.env.*
+!.env.example
+**/appsettings.Development.json
+
+# İmajda gerekmeyenler.
+.git/
+.github/
+.vs/
+tests/
+*.md
+**/*.user

@@ -66,6 +66,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+// /health: veritabanına bağlanılabiliyor mu? Docker/compose ve izleme araçları buna bakar.
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<CryptoFxTrackerDbContext>("database");
+
 var app = builder.Build();
 
 app.UseSwagger();
@@ -181,6 +185,7 @@ app.MapDelete("/api/watchlist/{symbol}", async (string symbol, ClaimsPrincipal u
 .WithName("RemoveFromWatchlist")
 .WithTags("Watchlist");
 
+app.MapHealthChecks("/health").WithTags("Health");
 app.MapAlertEndpoints();
 app.MapUserEndpoints();
 
